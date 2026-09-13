@@ -10,10 +10,10 @@ let betPerHand = 25;
 let numHandsSelected = 1;
 
 // How long a single card takes to fly from the dealer's shoe to its slot.
-// "normal" matches the classic 1.5s-per-card pace; slow/fast scale from there.
-const SPEED_MS = { slow: 2200, normal: 1500, fast: 800 };
+// "normal" is a quick, snappy 0.5s per card; slow/fast scale from there.
+const SPEED_MS = { slow: 800, normal: 500, fast: 250 };
 function dealMs(){ return SPEED_MS[account.settings.speed] || SPEED_MS.normal; }
-function flipMs(){ return Math.max(240, Math.round(dealMs() * 0.4)); }
+function flipMs(){ return Math.max(180, Math.round(dealMs() * 0.5)); }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
 /* ---------------- audio (tiny beeps, no external assets) ---------------- */
