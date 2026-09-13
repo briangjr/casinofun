@@ -249,6 +249,37 @@ select, input{ font-family: inherit; }
   font-size: 1rem; margin-top: 4px; text-shadow: 0 1px 6px rgba(0,0,0,.5);
 }
 
+/* ---------- pre-set "first move" picker on waiting hands ---------- */
+.preset-label{
+  font-size:.6rem; text-transform:uppercase; letter-spacing:.08em; color: var(--ink-dim);
+  margin-top: 4px;
+}
+.preset-picker{ display:flex; gap:4px; flex-wrap:wrap; justify-content:center; max-width: 140px; }
+.preset-btn{
+  font-size:.64rem; font-weight:700; padding: 3px 8px; border-radius: 7px;
+  background: rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.18); color: var(--ink-dim);
+  transition: all .12s ease;
+}
+.preset-btn:hover{ background: rgba(255,255,255,.14); color: var(--ink); }
+.preset-btn.selected{ background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color:#241d09; border-color: var(--gold); }
+.preset-btn.preset-clear{ opacity:.6; padding: 3px 7px; }
+
+/* ---------- insurance prompt ---------- */
+.insurance-modal{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background: rgba(5,10,8,.62); z-index: 20; border-radius: inherit;
+}
+.insurance-card{
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--gold); border-radius: var(--radius);
+  padding: 24px 26px; max-width: 380px; text-align:center;
+  box-shadow: var(--shadow-lg);
+}
+.insurance-card h3{ color: var(--gold-bright); margin-bottom: 10px; }
+.insurance-card p{ font-size:.9rem; margin-bottom: 18px; }
+.insurance-card strong{ color: var(--gold-bright); }
+.insurance-actions{ display:flex; gap: 12px; justify-content:center; flex-wrap:wrap; }
+
 /* ---------- playing cards ---------- */
 .card{
   --cw: 78px; --ch: 110px;
