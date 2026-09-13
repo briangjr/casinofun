@@ -210,7 +210,7 @@ select, input{ font-family: inherit; }
   margin-bottom: 8px; font-weight:700;
 }
 .dealer-area{ display:flex; flex-direction:column; align-items:center; margin-bottom: 10px; min-height: 130px; }
-.hand-row{ display:flex; gap: -20px; justify-content:center; min-height: 108px; position: relative; }
+.hand-row{ display:flex; justify-content:center; min-height: 108px; position: relative; }
 .hand-total{
   margin-top: 6px; font-weight:800; color: var(--gold-bright); font-size:.95rem;
   background: rgba(0,0,0,.35); padding: 2px 12px; border-radius: 999px; min-height: 1.4em;
@@ -259,11 +259,9 @@ select, input{ font-family: inherit; }
   box-shadow: 0 6px 14px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.6) inset;
   margin-left: -30px;
   border: 1px solid rgba(0,0,0,.08);
-  animation: dealIn .28s ease;
   flex-shrink: 0;
 }
 .hand-row .card:first-child{ margin-left:0; }
-@keyframes dealIn{ from{ opacity:0; transform: translateY(-40px) rotate(-8deg); } to{ opacity:1; transform:none; } }
 
 .card.face-down{
   background: repeating-linear-gradient(135deg, #7a1020, #7a1020 4px, #5c0c18 4px, #5c0c18 8px);
