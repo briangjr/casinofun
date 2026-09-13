@@ -149,6 +149,11 @@ function setMessage(msg){
 }
 
 let isAnimating = false;
+// The engine resolves win/lose the instant the last hand action happens —
+// well before the dealer's cards are animated onto the table. This flag is
+// what actually gates showing outcomes/coloring in the UI, so nothing about
+// the result leaks out until the dealer's whole hand has been revealed.
+let resultsRevealed = false;
 
 /* ---- per-hand DOM (kept attached to the hand object itself, so it survives
    re-ordering across a split without losing already-dealt cards) ---- */
@@ -174,8 +179,45 @@ function ensureHandDom(hand){
   outcome.className = 'hand-outcome';
   slot.appendChild(outcome);
 
-  hand.dom = { slot, betChip, row, total, outcome };
+  const presetLabel = document.createElement('div');
+  presetLabel.className = 'preset-label';
+  presetLabel.textContent = 'First move';
+  presetLabel.hidden = true;
+  slot.appendChild(presetLabel);
+
+  const presetWrap = document.createElement('div');
+  presetWrap.className = 'preset-picker';
+  presetWrap.hidden = true;
+  const presetBtns = {};
+  [['hit', 'Hit'], ['stand', 'Stand'], ['double', 'Dbl'], ['split', 'Split']].forEach(([move, label]) => {
+    const b = document.createElement('button');
+    b.className = 'preset-btn';
+    b.type = 'button';
+    b.textContent = label;
+    b.addEventListener('click', () => setPreset(hand, move));
+    presetWrap.appendChild(b);
+    presetBtns[move] = b;
+  });
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'preset-btn preset-clear';
+  clearBtn.type = 'button';
+  clearBtn.textContent = '✕';
+  clearBtn.title = 'Clear preset';
+  clearBtn.addEventListener('click', () => setPreset(hand, null));
+  presetWrap.appendChild(clearBtn);
+  slot.appendChild(presetWrap);
+
+  hand.dom = { slot, betChip, row, total, outcome, presetLabel, presetWrap, presetBtns };
   return hand.dom;
+}
+
+/** Set (or clear) the pre-selected first move for a hand that's still
+ *  waiting its turn. Consumed automatically the moment play reaches it. */
+function setPreset(hand, move){
+  hand.presetMove = move;
+  const dom = hand.dom;
+  if (!dom || !dom.presetBtns) return;
+  Object.entries(dom.presetBtns).forEach(([m, btn]) => btn.classList.toggle('selected', move === m));
 }
 
 /** Re-appends every hand's slot in game.hands order — moves existing nodes
@@ -188,21 +230,33 @@ function layoutPlayerArea(){
 /** Cheap text/class refresh — never touches already-dealt card elements. */
 function refreshHandSlotsStatus(){
   const active = game.activeHand();
+  const spareBalance = account.balance - game.hands.reduce((s, h) => s + h.bet, 0);
+
   game.hands.forEach(h => {
     const dom = ensureHandDom(h);
     dom.betChip.textContent = formatMoney(h.bet);
     dom.total.textContent = h.cards.length ? handValue(h.cards) : '';
     dom.slot.classList.toggle('is-active', game.phase === 'playerTurn' && h === active);
-    dom.slot.classList.toggle('is-bust', h.status === 'bust');
-    dom.slot.classList.toggle('is-blackjack', h.status === 'blackjack');
+    dom.slot.classList.toggle('is-bust', resultsRevealed && h.status === 'bust');
+    dom.slot.classList.toggle('is-blackjack', resultsRevealed && h.status === 'blackjack');
 
-    if (game.phase === 'roundOver' && h.outcome){
+    if (resultsRevealed && h.outcome){
       const labels = { win: 'WIN', blackjack: 'BLACKJACK!', push: 'PUSH', loss: 'LOSE' };
       dom.outcome.textContent = `${labels[h.outcome]} ${h.net > 0 ? formatMoney(h.net) : (h.net < 0 ? formatMoney(h.net) : '')}`;
       dom.outcome.className = 'hand-outcome ' + (h.outcome === 'win' || h.outcome === 'blackjack' ? 'win' : (h.outcome === 'push' ? 'push' : 'loss'));
     } else {
       dom.outcome.textContent = '';
       dom.outcome.className = 'hand-outcome';
+    }
+
+    // "First move" preset picker: only offered on hands still waiting their
+    // turn (dealt, untouched, not the one currently being played).
+    const isWaiting = game.phase === 'playerTurn' && h.status === 'active' && h !== active;
+    dom.presetLabel.hidden = !isWaiting;
+    dom.presetWrap.hidden = !isWaiting;
+    if (isWaiting){
+      dom.presetBtns.double.hidden = !(game.canDouble(h) && spareBalance >= h.bet);
+      dom.presetBtns.split.hidden = !(game.canSplit(h) && spareBalance >= h.originalBet);
     }
   });
 
@@ -320,6 +374,8 @@ async function runDealerSequenceAndSettle(){
     updateDealerTotalRevealed(i + 1);
   }
 
+  // Only now — with every dealer card on the table — is it OK to reveal outcomes.
+  resultsRevealed = true;
   settleAndShowResults();
 }
 
@@ -343,82 +399,26 @@ function settleAndShowResults(){
   runAchievementCheck();
 }
 
-/** Common tail for hit/stand/double/split: refresh the table, then either
- *  hand control back to the player or run the dealer's turn. */
-async function afterEngineAction(){
-  refreshHandSlotsStatus();
-  if (game.phase === 'playerTurn'){
-    isAnimating = false;
-    updateActionButtons();
-    return;
-  }
-  await runDealerSequenceAndSettle();
-}
-
-async function startRoundFlow(){
-  if (isAnimating || betPerHand <= 0) return;
-  const totalWager = betPerHand * numHandsSelected;
-  if (totalWager > account.balance){
-    setMessage("You don't have enough chips for that wager.");
-    return;
-  }
-
-  isAnimating = true;
-  btnDeal.disabled = true;
-
-  const { reshuffled } = game.startRound(betPerHand, numHandsSelected);
-  setMessage(reshuffled ? 'Shoe reshuffled. New cards in play.' : '');
-
-  dockBetSetup.hidden = true;
-  dockActions.hidden = false;
-  btnNewRound.hidden = true;
-  [btnHit, btnStand, btnDouble, btnSplit].forEach(b => { b.hidden = false; b.disabled = true; });
-
-  await dealInitialRound();
-
-  if (game.phase === 'playerTurn'){
-    isAnimating = false;
-    updateActionButtons();
-  } else {
-    await runDealerSequenceAndSettle();
-  }
-}
-
-async function doHit(){
-  if (isAnimating || btnHit.disabled) return;
-  isAnimating = true; updateActionButtons();
-
+/* ---- core action performers: reusable by a manual button click AND by
+   the automatic "first move" preset player below ---- */
+async function performHit(){
   const hand = game.activeHand();
   game.hit();
   await animateCardInto(hand.dom.row, hand.cards[hand.cards.length - 1], false);
-
-  await afterEngineAction();
 }
 
-async function doStand(){
-  if (isAnimating || btnStand.disabled) return;
-  isAnimating = true; updateActionButtons();
-
+async function performStand(){
   game.stand();
-  await afterEngineAction();
 }
 
-async function doDouble(){
-  if (isAnimating || btnDouble.disabled) return;
-  isAnimating = true; updateActionButtons();
-
+async function performDouble(){
   const hand = game.activeHand();
   game.double();
   hand.dom.betChip.textContent = formatMoney(hand.bet);
   await animateCardInto(hand.dom.row, hand.cards[hand.cards.length - 1], false);
-
-  await afterEngineAction();
 }
 
-async function doSplit(){
-  if (isAnimating || btnSplit.disabled) return;
-  isAnimating = true; updateActionButtons();
-
+async function performSplit(){
   const originalHand = game.activeHand();
   const originalIndex = game.activeHandIndex;
   const movedCardEl = originalHand.dom.row.lastElementChild; // becomes the new hand's first card
@@ -447,7 +447,165 @@ async function doSplit(){
 
   await animateCardInto(newDom.row, newHand.cards[newHand.cards.length - 1], false);
   newDom.total.textContent = handValue(newHand.cards);
+}
 
+/** If the hand that just became active has a pre-selected "first move",
+ *  play it automatically (consuming it) instead of waiting on a click. */
+async function maybeAutoPlayPreset(){
+  const hand = game.activeHand();
+  if (!hand || !hand.presetMove) return false;
+
+  const move = hand.presetMove;
+  hand.presetMove = null;
+  if (hand.dom){
+    hand.dom.presetWrap.hidden = true;
+    hand.dom.presetLabel.hidden = true;
+  }
+
+  const spareBalance = account.balance - game.hands.reduce((s, h) => s + h.bet, 0);
+  if (move === 'stand'){
+    await performStand();
+  } else if (move === 'hit' && game.canHit(hand)){
+    await performHit();
+  } else if (move === 'double' && game.canDouble(hand) && spareBalance >= hand.bet){
+    await performDouble();
+  } else if (move === 'split' && game.canSplit(hand) && spareBalance >= hand.originalBet){
+    await performSplit();
+  } else {
+    return false; // no longer valid for some reason — fall back to manual play
+  }
+  return true;
+}
+
+/** Common tail for hit/stand/double/split: refresh the table, then either
+ *  auto-play a queued preset, hand control back to the player, or run the
+ *  dealer's turn. */
+async function afterEngineAction(){
+  refreshHandSlotsStatus();
+  if (game.phase === 'playerTurn'){
+    const autoPlayed = await maybeAutoPlayPreset();
+    if (autoPlayed){
+      await afterEngineAction();
+      return;
+    }
+    isAnimating = false;
+    updateActionButtons();
+    return;
+  }
+  await runDealerSequenceAndSettle();
+}
+
+/* ---- insurance (offered whenever the dealer's up-card is an Ace) ---- */
+function offerInsurance(){
+  return new Promise(resolve => {
+    const totalWager = game.hands.reduce((s, h) => s + h.originalBet, 0);
+    const insuranceCost = Math.floor(totalWager / 2);
+    const modal = document.getElementById('insurance-modal');
+    const amountEl = document.getElementById('insurance-amount');
+    const yesBtn = document.getElementById('btn-insurance-yes');
+    const noBtn = document.getElementById('btn-insurance-no');
+
+    amountEl.textContent = formatMoney(insuranceCost);
+    yesBtn.disabled = insuranceCost <= 0 || insuranceCost > account.balance;
+    modal.hidden = false;
+
+    function cleanup(){
+      modal.hidden = true;
+      yesBtn.removeEventListener('click', onYes);
+      noBtn.removeEventListener('click', onNo);
+    }
+    function onYes(){ game.insuranceBet = insuranceCost; cleanup(); resolve(); }
+    function onNo(){ game.insuranceBet = 0; cleanup(); resolve(); }
+    yesBtn.addEventListener('click', onYes);
+    noBtn.addEventListener('click', onNo);
+  });
+}
+
+/** Offer insurance, then peek at the hole card exactly like a real table:
+ *  if the dealer does have blackjack, reveal it immediately and settle the
+ *  round right there; otherwise the hole card stays hidden and play
+ *  continues as normal. Returns true if the round was fully settled here. */
+async function handleInsurance(){
+  await offerInsurance();
+
+  if (game.dealerHasBlackjack()){
+    setMessage('Dealer checks the hole card…');
+    await sleep(400);
+    await flipDealerHoleCard(game.dealerCards[1]);
+    updateDealerTotalRevealed(2);
+
+    game.resolveEarlyDealerBlackjack();
+    resultsRevealed = true;
+    settleAndShowResults();
+    return true;
+  }
+
+  if (game.insuranceBet > 0){
+    setMessage('Dealer checks the hole card… no blackjack. Insurance lost.');
+  }
+  return false;
+}
+
+async function startRoundFlow(){
+  if (isAnimating || betPerHand <= 0) return;
+  const totalWager = betPerHand * numHandsSelected;
+  if (totalWager > account.balance){
+    setMessage("You don't have enough chips for that wager.");
+    return;
+  }
+
+  isAnimating = true;
+  resultsRevealed = false;
+  btnDeal.disabled = true;
+
+  const { reshuffled } = game.startRound(betPerHand, numHandsSelected);
+  setMessage(reshuffled ? 'Shoe reshuffled. New cards in play.' : '');
+
+  dockBetSetup.hidden = true;
+  dockActions.hidden = false;
+  btnNewRound.hidden = true;
+  [btnHit, btnStand, btnDouble, btnSplit].forEach(b => { b.hidden = false; b.disabled = true; });
+
+  await dealInitialRound();
+
+  if (game.dealerCards[0] && game.dealerCards[0].rank === 'A'){
+    const settledEarly = await handleInsurance();
+    if (settledEarly) return;
+  }
+
+  if (game.phase === 'playerTurn'){
+    isAnimating = false;
+    updateActionButtons();
+  } else {
+    await runDealerSequenceAndSettle();
+  }
+}
+
+async function doHit(){
+  if (isAnimating || btnHit.disabled) return;
+  isAnimating = true; updateActionButtons();
+  await performHit();
+  await afterEngineAction();
+}
+
+async function doStand(){
+  if (isAnimating || btnStand.disabled) return;
+  isAnimating = true; updateActionButtons();
+  await performStand();
+  await afterEngineAction();
+}
+
+async function doDouble(){
+  if (isAnimating || btnDouble.disabled) return;
+  isAnimating = true; updateActionButtons();
+  await performDouble();
+  await afterEngineAction();
+}
+
+async function doSplit(){
+  if (isAnimating || btnSplit.disabled) return;
+  isAnimating = true; updateActionButtons();
+  await performSplit();
   await afterEngineAction();
 }
 
@@ -460,6 +618,8 @@ btnSplit.addEventListener('click', doSplit);
 btnNewRound.addEventListener('click', () => {
   if (isAnimating) return;
   game.reset();
+  resultsRevealed = false;
+  document.getElementById('insurance-modal').hidden = true;
   dockBetSetup.hidden = false;
   dockActions.hidden = true;
   setMessage('');

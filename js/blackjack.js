@@ -19,6 +19,7 @@ class BlackjackGame {
     this.dealerCards = [];
     this.hands = [];
     this.activeHandIndex = -1;
+    this.insuranceBet = 0;
   }
 
   setDecks(numDecks){
@@ -53,6 +54,7 @@ class BlackjackGame {
 
     this.dealerCards = [];
     this.hands = [];
+    this.insuranceBet = 0;
     for (let i = 0; i < numHands; i++){
       this.hands.push(this.makeHand(betPerHand));
     }
@@ -246,6 +248,19 @@ class BlackjackGame {
     this.phase = 'roundOver';
   }
 
+  /** Dealer's up-card is an Ace: does the hole card make it a blackjack? */
+  dealerHasBlackjack(){
+    return isBlackjack(this.dealerCards);
+  }
+
+  /** Called when the dealer peeks and turns out to have blackjack before any
+   *  hand has been played. Every hand is still exactly its original 2 cards,
+   *  so settle() resolves them correctly (win/loss/push) as-is. */
+  resolveEarlyDealerBlackjack(){
+    this.activeHandIndex = -1;
+    this.settle();
+  }
+
   /** Summarize the finished round for storage.recordRound(). */
   buildRoundResult(){
     const hands = this.hands.map(h => ({
@@ -256,8 +271,14 @@ class BlackjackGame {
       wasDouble: h.isDoubled,
       wasBust: h.status === 'bust',
     }));
-    const totalWagered = hands.reduce((s, h) => s + h.bet, 0);
-    const netResult = hands.reduce((s, h) => s + h.net, 0);
-    return { numHands: hands.length, totalWagered, netResult, hands };
+    const handsWagered = hands.reduce((s, h) => s + h.bet, 0);
+    const insuranceBet = this.insuranceBet || 0;
+    let insuranceNet = 0;
+    if (insuranceBet > 0){
+      insuranceNet = this.dealerHasBlackjack() ? insuranceBet * 2 : -insuranceBet;
+    }
+    const totalWagered = handsWagered + insuranceBet;
+    const netResult = hands.reduce((s, h) => s + h.net, 0) + insuranceNet;
+    return { numHands: hands.length, totalWagered, netResult, hands, insuranceBet, insuranceNet };
   }
 }

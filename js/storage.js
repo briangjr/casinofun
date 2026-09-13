@@ -103,7 +103,7 @@ function addFunds(state, amount){
  * }
  */
 function recordRound(state, roundResult){
-  const { numHands, totalWagered, netResult, hands } = roundResult;
+  const { numHands, totalWagered, netResult, hands, insuranceBet = 0, insuranceNet = 0 } = roundResult;
 
   state.balance += netResult;
   state.stats.roundsPlayed += 1;
@@ -111,7 +111,12 @@ function recordRound(state, roundResult){
   state.stats.totalWagered += totalWagered;
   state.stats.maxHandsInRound = Math.max(state.stats.maxHandsInRound, numHands);
 
-  let roundNet = 0;
+  // Insurance is a side bet, not a hand result — it feeds total won/lost but
+  // never touches hand counts, win/loss streaks, or biggest-win/loss records.
+  if (insuranceNet > 0) state.stats.totalWon += insuranceNet;
+  else if (insuranceNet < 0) state.stats.totalLost += Math.abs(insuranceNet);
+
+  let roundNet = insuranceNet;
   for (const h of hands){
     roundNet += h.net;
     state.stats.biggestSingleBet = Math.max(state.stats.biggestSingleBet, h.bet);
@@ -150,6 +155,8 @@ function recordRound(state, roundResult){
     netResult: roundNet,
     balanceAfter: state.balance,
     hands: hands.map(h => ({ bet: h.bet, outcome: h.outcome, net: h.net })),
+    insuranceBet: insuranceBet || 0,
+    insuranceNet: insuranceNet || 0,
   };
   state.history.unshift(entry);
   if (state.history.length > MAX_HISTORY) state.history.length = MAX_HISTORY;
