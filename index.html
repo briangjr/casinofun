@@ -114,6 +114,18 @@
       </section>
 
       <div class="message-banner" id="table-message"></div>
+
+      <!-- Insurance prompt (dealer showing an Ace) -->
+      <div class="insurance-modal" id="insurance-modal" hidden>
+        <div class="insurance-card">
+          <h3>Insurance?</h3>
+          <p>The dealer is showing an Ace. Insure your hands against a dealer blackjack for <strong id="insurance-amount">$0</strong> &mdash; pays 2 to 1.</p>
+          <div class="insurance-actions">
+            <button class="btn btn-gold" id="btn-insurance-yes">Take Insurance</button>
+            <button class="btn btn-ghost" id="btn-insurance-no">No Thanks</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Control dock -->
