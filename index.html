@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+<title>Royal Vegas &mdash; Home Casino</title>
+<meta name="description" content="A private, play-money casino: multi-hand blackjack with lifetime stats, history and achievements." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♠️</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ================= TOP NAV ================= -->
+<header class="topbar">
+  <div class="brand" data-nav="lobby">
+    <span class="brand-mark">♠</span>
+    <span class="brand-text">ROYAL <span>VEGAS</span></span>
+  </div>
+
+  <nav class="mainnav">
+    <button class="navbtn active" data-nav="lobby">Lobby</button>
+    <button class="navbtn" data-nav="blackjack">Blackjack</button>
+    <button class="navbtn" data-nav="slots">Slots</button>
+    <button class="navbtn" data-nav="history">History</button>
+    <button class="navbtn" data-nav="achievements">Achievements</button>
+    <button class="navbtn" data-nav="settings">Settings</button>
+  </nav>
+
+  <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+    <span class="chip-ico">🪙</span>
+    <span class="wallet-amount" id="hud-balance">$0</span>
+  </div>
+</header>
+
+<!-- ================= LOBBY ================= -->
+<main id="screen-lobby" class="screen active">
+  <div class="lobby-hero">
+    <div class="hero-glow"></div>
+    <h1 class="hero-title">ROYAL <span>VEGAS</span></h1>
+    <p class="hero-sub">Your private, play-money casino floor. No real money in. No real money out. Just the game.</p>
+    <div class="hero-stats" id="lobby-stat-row">
+      <div class="hero-stat">
+        <div class="hero-stat-label">Bankroll</div>
+        <div class="hero-stat-value" id="lobby-balance">$0</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Lifetime Net</div>
+        <div class="hero-stat-value" id="lobby-net">$0</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Hands Played</div>
+        <div class="hero-stat-value" id="lobby-hands">0</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Added To Date</div>
+        <div class="hero-stat-value" id="lobby-added">$0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <div class="game-card" data-nav="blackjack">
+      <div class="game-card-art bj-art">
+        <span class="mini-card mc1">A♠</span>
+        <span class="mini-card mc2">K♥</span>
+        <span class="mini-card mc3">7♦</span>
+      </div>
+      <div class="game-card-body">
+        <h3>Multi-Hand Blackjack</h3>
+        <p>Play up to 5 hands at once against the dealer. Split, double down, and chase 21.</p>
+        <button class="btn btn-gold">Play Now</button>
+      </div>
+    </div>
+
+    <div class="game-card disabled" data-nav="slots">
+      <div class="game-card-art slots-art">
+        <span class="reel-emoji">🍒</span><span class="reel-emoji">7️⃣</span><span class="reel-emoji">🔔</span>
+      </div>
+      <div class="game-card-body">
+        <h3>Vegas Slots</h3>
+        <p>Spinning reels, coming soon to the floor.</p>
+        <button class="btn btn-ghost">Coming Soon</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= BLACKJACK TABLE ================= -->
+<main id="screen-blackjack" class="screen">
+  <div class="table-room">
+    <div class="table-felt">
+      <div class="felt-arc-text">ROYAL VEGAS BLACKJACK &bull; PAYS 3 TO 2</div>
+      <div class="felt-arc-text felt-arc-text-sub">DEALER MUST STAND ON 17</div>
+
+      <!-- Dealer -->
+      <section class="dealer-area">
+        <div class="seat-label">DEALER</div>
+        <div class="hand-row dealer-hand" id="dealer-hand"></div>
+        <div class="hand-total" id="dealer-total"></div>
+      </section>
+
+      <!-- shoe indicator -->
+      <div class="shoe" title="Cards remaining in shoe">
+        <div class="shoe-card"></div>
+        <div class="shoe-count" id="shoe-count">312</div>
+      </div>
+
+      <!-- Player hands -->
+      <section class="player-area" id="player-area">
+        <!-- hand slots injected by JS -->
+      </section>
+
+      <div class="message-banner" id="table-message"></div>
+    </div>
+
+    <!-- Control dock -->
+    <div class="control-dock">
+
+      <div class="dock-section bet-setup" id="dock-betsetup">
+        <div class="dock-row">
+          <label class="dock-label">Hands</label>
+          <div class="stepper" id="hand-count-stepper">
+            <button class="stepper-btn" data-step="-1">&minus;</button>
+            <span class="stepper-value" id="hand-count-value">1</span>
+            <button class="stepper-btn" data-step="1">&plus;</button>
+          </div>
+        </div>
+        <div class="dock-row">
+          <label class="dock-label">Bet / Hand</label>
+          <div class="chip-rail" id="chip-rail">
+            <button class="chip chip-5" data-chip="5">$5</button>
+            <button class="chip chip-25" data-chip="25">$25</button>
+            <button class="chip chip-100" data-chip="100">$100</button>
+            <button class="chip chip-500" data-chip="500">$500</button>
+            <button class="chip chip-clear" data-chip="clear">Clear</button>
+          </div>
+        </div>
+        <div class="dock-row bet-total-row">
+          <span>Total Wager: <strong id="bet-total-display">$0</strong></span>
+          <button class="btn btn-gold btn-deal" id="btn-deal" disabled>Deal</button>
+        </div>
+      </div>
+
+      <div class="dock-section action-buttons" id="dock-actions" hidden>
+        <button class="btn btn-action" id="btn-hit">Hit</button>
+        <button class="btn btn-action" id="btn-stand">Stand</button>
+        <button class="btn btn-action" id="btn-double">Double</button>
+        <button class="btn btn-action" id="btn-split">Split</button>
+        <button class="btn btn-ghost" id="btn-newround" hidden>New Round</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= SLOTS (placeholder) ================= -->
+<main id="screen-slots" class="screen">
+  <div class="coming-soon">
+    <div class="coming-soon-reels">🍒 7️⃣ 🔔</div>
+    <h2>Vegas Slots</h2>
+    <p>The slot machine is being built for the next update. Your bankroll, lifetime stats and achievements will carry straight over once it lands.</p>
+    <button class="btn btn-gold" data-nav="blackjack">Back to Blackjack</button>
+  </div>
+</main>
+
+<!-- ================= HISTORY ================= -->
+<main id="screen-history" class="screen">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Hand History</h2>
+      <div class="panel-header-stats" id="history-summary"></div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table" id="history-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Date</th><th>Hands</th><th>Wagered</th><th>Result</th><th>Net</th><th>Balance After</th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+      <p class="empty-state" id="history-empty">No hands played yet &mdash; head to the Blackjack table to get started.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ================= ACHIEVEMENTS ================= -->
+<main id="screen-achievements" class="screen">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Achievements</h2>
+      <div class="panel-header-stats" id="achievements-summary"></div>
+    </div>
+    <div class="achv-grid" id="achv-grid"></div>
+  </div>
+</main>
+
+<!-- ================= SETTINGS ================= -->
+<main id="screen-settings" class="screen">
+  <div class="panel panel-settings">
+    <div class="panel-header"><h2>Settings &amp; Account</h2></div>
+
+    <div class="settings-block">
+      <h3>Bankroll</h3>
+      <p class="settings-help">This is play money only &mdash; nothing here is ever real currency. Add as much as you like whenever you want to keep playing.</p>
+      <div class="settings-row">
+        <span>Current Balance</span>
+        <strong id="settings-balance">$0</strong>
+      </div>
+      <div class="settings-row add-funds-row">
+        <input type="number" id="add-funds-input" min="1" step="1" placeholder="Amount to add" />
+        <button class="btn btn-gold" id="btn-add-funds">Add Funds</button>
+      </div>
+      <div class="quick-add-row">
+        <button class="btn btn-ghost quick-add" data-amt="100">+$100</button>
+        <button class="btn btn-ghost quick-add" data-amt="500">+$500</button>
+        <button class="btn btn-ghost quick-add" data-amt="1000">+$1,000</button>
+        <button class="btn btn-ghost quick-add" data-amt="5000">+$5,000</button>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Lifetime Stats</h3>
+      <div class="stat-grid" id="settings-stat-grid"></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Table Options</h3>
+      <div class="settings-row">
+        <span>Number of Decks in Shoe</span>
+        <select id="setting-decks">
+          <option value="1">1 Deck</option>
+          <option value="2">2 Decks</option>
+          <option value="4">4 Decks</option>
+          <option value="6" selected>6 Decks</option>
+          <option value="8">8 Decks</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <span>Table Felt Color</span>
+        <select id="setting-felt">
+          <option value="green" selected>Classic Green</option>
+          <option value="red">Ruby Red</option>
+          <option value="blue">Midnight Blue</option>
+          <option value="black">Onyx Black</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <span>Sound Effects</span>
+        <label class="switch">
+          <input type="checkbox" id="setting-sound" checked>
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Deal Animation Speed</span>
+        <select id="setting-speed">
+          <option value="slow">Relaxed</option>
+          <option value="normal" selected>Normal</option>
+          <option value="fast">Fast</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-block danger-block">
+      <h3>Reset</h3>
+      <p class="settings-help">Wipes balance, lifetime stats, history and achievements back to a fresh account. This cannot be undone.</p>
+      <button class="btn btn-danger" id="btn-reset-all">Reset Entire Account</button>
+    </div>
+  </div>
+</main>
+
+<!-- toast for achievement unlocks -->
+<div class="toast-stack" id="toast-stack"></div>
+
+<script src="js/storage.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/achievements.js"></script>
+<script src="js/blackjack.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
