@@ -9,7 +9,12 @@ let game = new BlackjackGame(account.settings.decks);
 let betPerHand = 25;
 let numHandsSelected = 1;
 
-const SPEED_MS = { slow: 480, normal: 300, fast: 140 };
+// How long a single card takes to fly from the dealer's shoe to its slot.
+// "normal" matches the classic 1.5s-per-card pace; slow/fast scale from there.
+const SPEED_MS = { slow: 2200, normal: 1500, fast: 800 };
+function dealMs(){ return SPEED_MS[account.settings.speed] || SPEED_MS.normal; }
+function flipMs(){ return Math.max(240, Math.round(dealMs() * 0.4)); }
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
 /* ---------------- audio (tiny beeps, no external assets) ---------------- */
 let audioCtx = null;
@@ -32,6 +37,7 @@ const sfxDeal = () => beep(520, 0.05, 'triangle', 0.04);
 const sfxChip = () => beep(720, 0.04, 'square', 0.03);
 const sfxWin = () => { beep(660, 0.09, 'sine', 0.05); setTimeout(() => beep(880, 0.12, 'sine', 0.05), 90); };
 const sfxLose = () => beep(160, 0.18, 'sawtooth', 0.04);
+const sfxFlip = () => beep(340, 0.07, 'sine', 0.03);
 const sfxAchievement = () => { beep(784, 0.08, 'sine', 0.05); setTimeout(() => beep(988, 0.14, 'sine', 0.05), 100); };
 
 /* ---------------- navigation ---------------- */
@@ -131,12 +137,6 @@ document.getElementById('chip-rail').addEventListener('click', e => {
   updateBetSetupUI();
 });
 
-function cardEl(card, faceDown){
-  const el = renderCard(card, faceDown);
-  el.style.animationDuration = SPEED_MS[account.settings.speed] + 'ms';
-  return el;
-}
-
 /** Show the bottom-right index only on the last (fully exposed) card in a fanned row. */
 function markLastCard(rowEl){
   rowEl.querySelectorAll('.card.is-last').forEach(c => c.classList.remove('is-last'));
@@ -144,110 +144,190 @@ function markLastCard(rowEl){
   if (cards.length) cards[cards.length - 1].classList.add('is-last');
 }
 
-function renderTable(){
-  // dealer
-  const dealerHandEl = document.getElementById('dealer-hand');
-  dealerHandEl.innerHTML = '';
-  const dealerHidden = game.phase === 'playerTurn';
-  game.dealerCards.forEach((c, i) => {
-    dealerHandEl.appendChild(cardEl(c, dealerHidden && i === 1));
-  });
-  markLastCard(dealerHandEl);
-  const dealerTotalEl = document.getElementById('dealer-total');
-  dealerTotalEl.textContent = dealerHidden
-    ? (game.dealerCards[0] ? handValue([game.dealerCards[0]]) + ' + ?' : '')
-    : (game.dealerCards.length ? handValue(game.dealerCards) : '');
-
-  // player hands
-  const area = document.getElementById('player-area');
-  area.innerHTML = '';
-  game.hands.forEach((h, idx) => {
-    const slot = document.createElement('div');
-    slot.className = 'hand-slot';
-    if (game.phase === 'playerTurn' && idx === game.activeHandIndex) slot.classList.add('is-active');
-    if (h.status === 'bust') slot.classList.add('is-bust');
-    if (h.status === 'blackjack') slot.classList.add('is-blackjack');
-
-    const betChip = document.createElement('div');
-    betChip.className = 'hand-bet-chip';
-    betChip.textContent = formatMoney(h.bet);
-    slot.appendChild(betChip);
-
-    const row = document.createElement('div');
-    row.className = 'hand-row';
-    h.cards.forEach(c => row.appendChild(cardEl(c, false)));
-    markLastCard(row);
-    slot.appendChild(row);
-
-    const total = document.createElement('div');
-    total.className = 'hand-total';
-    total.textContent = h.cards.length ? handValue(h.cards) : '';
-    slot.appendChild(total);
-
-    const outcome = document.createElement('div');
-    outcome.className = 'hand-outcome';
-    if (game.phase === 'roundOver' && h.outcome){
-      const labels = { win: 'WIN', blackjack: 'BLACKJACK!', push: 'PUSH', loss: 'LOSE' };
-      outcome.textContent = `${labels[h.outcome]} ${h.net > 0 ? formatMoney(h.net) : (h.net < 0 ? formatMoney(h.net) : '')}`;
-      outcome.classList.add(h.outcome === 'win' || h.outcome === 'blackjack' ? 'win' : (h.outcome === 'push' ? 'push' : 'loss'));
-    }
-    slot.appendChild(outcome);
-
-    area.appendChild(slot);
-  });
-
-  document.getElementById('shoe-count').textContent = game.cardsRemaining();
-
-  // action button availability
-  const active = game.activeHand();
-  btnHit.disabled = !game.canHit(active);
-  btnStand.disabled = !(active && active.status === 'active');
-  const spareBalance = account.balance - game.hands.reduce((s, h) => s + h.bet, 0);
-  btnDouble.disabled = !(game.canDouble(active) && spareBalance >= (active ? active.bet : Infinity));
-  btnSplit.disabled = !(game.canSplit(active) && spareBalance >= (active ? active.originalBet : Infinity));
-}
-
 function setMessage(msg){
   tableMessage.textContent = msg;
 }
 
-function startRoundFlow(){
-  if (betPerHand <= 0) return;
-  const totalWager = betPerHand * numHandsSelected;
-  if (totalWager > account.balance){
-    setMessage("You don't have enough chips for that wager.");
-    return;
-  }
+let isAnimating = false;
 
-  const { reshuffled } = game.startRound(betPerHand, numHandsSelected);
-  if (reshuffled) setMessage('Shoe reshuffled. New cards in play.');
-  else setMessage('');
+/* ---- per-hand DOM (kept attached to the hand object itself, so it survives
+   re-ordering across a split without losing already-dealt cards) ---- */
+function ensureHandDom(hand){
+  if (hand.dom) return hand.dom;
+
+  const slot = document.createElement('div');
+  slot.className = 'hand-slot';
+
+  const betChip = document.createElement('div');
+  betChip.className = 'hand-bet-chip';
+  slot.appendChild(betChip);
+
+  const row = document.createElement('div');
+  row.className = 'hand-row';
+  slot.appendChild(row);
+
+  const total = document.createElement('div');
+  total.className = 'hand-total';
+  slot.appendChild(total);
+
+  const outcome = document.createElement('div');
+  outcome.className = 'hand-outcome';
+  slot.appendChild(outcome);
+
+  hand.dom = { slot, betChip, row, total, outcome };
+  return hand.dom;
+}
+
+/** Re-appends every hand's slot in game.hands order — moves existing nodes
+ *  (no re-creation, no lost cards) rather than rebuilding them. */
+function layoutPlayerArea(){
+  const area = document.getElementById('player-area');
+  game.hands.forEach(h => area.appendChild(ensureHandDom(h).slot));
+}
+
+/** Cheap text/class refresh — never touches already-dealt card elements. */
+function refreshHandSlotsStatus(){
+  const active = game.activeHand();
+  game.hands.forEach(h => {
+    const dom = ensureHandDom(h);
+    dom.betChip.textContent = formatMoney(h.bet);
+    dom.total.textContent = h.cards.length ? handValue(h.cards) : '';
+    dom.slot.classList.toggle('is-active', game.phase === 'playerTurn' && h === active);
+    dom.slot.classList.toggle('is-bust', h.status === 'bust');
+    dom.slot.classList.toggle('is-blackjack', h.status === 'blackjack');
+
+    if (game.phase === 'roundOver' && h.outcome){
+      const labels = { win: 'WIN', blackjack: 'BLACKJACK!', push: 'PUSH', loss: 'LOSE' };
+      dom.outcome.textContent = `${labels[h.outcome]} ${h.net > 0 ? formatMoney(h.net) : (h.net < 0 ? formatMoney(h.net) : '')}`;
+      dom.outcome.className = 'hand-outcome ' + (h.outcome === 'win' || h.outcome === 'blackjack' ? 'win' : (h.outcome === 'push' ? 'push' : 'loss'));
+    } else {
+      dom.outcome.textContent = '';
+      dom.outcome.className = 'hand-outcome';
+    }
+  });
+
+  document.getElementById('shoe-count').textContent = game.cardsRemaining();
+  updateActionButtons();
+}
+
+function updateActionButtons(){
+  const active = game.activeHand();
+  const inTurn = game.phase === 'playerTurn';
+  btnHit.disabled = isAnimating || !inTurn || !game.canHit(active);
+  btnStand.disabled = isAnimating || !inTurn || !(active && active.status === 'active');
+  const spareBalance = account.balance - game.hands.reduce((s, h) => s + h.bet, 0);
+  btnDouble.disabled = isAnimating || !inTurn || !(game.canDouble(active) && spareBalance >= (active ? active.bet : Infinity));
+  btnSplit.disabled = isAnimating || !inTurn || !(game.canSplit(active) && spareBalance >= (active ? active.originalBet : Infinity));
+}
+
+/* ---- dealing animation: cards fly in from the dealer's shoe ---- */
+function dealOriginRect(){
+  return document.querySelector('.shoe').getBoundingClientRect();
+}
+
+async function animateCardInto(rowEl, card, faceDown){
+  const el = renderCard(card, faceDown);
+  rowEl.appendChild(el);
+  markLastCard(rowEl);
+
+  const origin = dealOriginRect();
+  const dest = el.getBoundingClientRect();
+  const dx = (origin.left + origin.width / 2) - (dest.left + dest.width / 2);
+  const dy = (origin.top + origin.height / 2) - (dest.top + dest.height / 2);
+
   sfxDeal();
+  const anim = el.animate([
+    { transform: `translate(${dx}px, ${dy}px) scale(.5) rotate(-14deg)`, opacity: 0 },
+    { transform: `translate(${dx * 0.3}px, ${dy * 0.3}px) scale(.82) rotate(-4deg)`, opacity: 1, offset: 0.65 },
+    { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 },
+  ], { duration: dealMs(), easing: 'cubic-bezier(.18,.7,.25,1)', fill: 'both' });
 
-  dockBetSetup.hidden = true;
-  dockActions.hidden = false;
-  btnNewRound.hidden = true;
-  [btnHit, btnStand, btnDouble, btnSplit].forEach(b => b.hidden = false);
-
-  renderTable();
-
-  if (game.phase === 'roundOver'){
-    finishRound();
-  }
+  try { await anim.finished; } catch (e) { /* animation cancelled — fine, ignore */ }
+  return el;
 }
 
-function afterAction(){
-  renderTable();
-  if (game.phase === 'roundOver'){
-    finishRound();
-  }
+/** Flip the dealer's face-down hole card over in place to reveal `card`. */
+async function flipDealerHoleCard(card){
+  const dealerRow = document.getElementById('dealer-hand');
+  const holeEl = dealerRow.children[1];
+  if (!holeEl) return;
+
+  const half = Math.round(flipMs() / 2);
+  sfxFlip();
+  await holeEl.animate(
+    [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0.05)' }],
+    { duration: half, easing: 'ease-in', fill: 'forwards' }
+  ).finished;
+
+  const fresh = renderCard(card, false);
+  holeEl.className = fresh.className;
+  holeEl.innerHTML = fresh.innerHTML;
+  markLastCard(dealerRow);
+
+  await holeEl.animate(
+    [{ transform: 'scaleX(0.05)' }, { transform: 'scaleX(1)' }],
+    { duration: half, easing: 'ease-out', fill: 'forwards' }
+  ).finished;
+  holeEl.style.transform = '';
 }
 
-function finishRound(){
+function updateDealerTotalHidden(){
+  const el = document.getElementById('dealer-total');
+  el.textContent = game.dealerCards[0] ? handValue([game.dealerCards[0]]) + ' + ?' : '';
+}
+function updateDealerTotalRevealed(cardCount){
+  document.getElementById('dealer-total').textContent = handValue(game.dealerCards.slice(0, cardCount));
+}
+
+/** Deal the opening two cards to every hand and the dealer, one card at a
+ *  time, in classic round-robin order (each hand, then the dealer, twice). */
+async function dealInitialRound(){
+  const dealerRow = document.getElementById('dealer-hand');
+  dealerRow.innerHTML = '';
+  document.getElementById('dealer-total').textContent = '';
+  document.getElementById('player-area').innerHTML = '';
+
+  layoutPlayerArea();
+  game.hands.forEach(h => {
+    h.dom.betChip.textContent = formatMoney(h.bet);
+    h.dom.total.textContent = '';
+    h.dom.outcome.textContent = '';
+  });
+
+  for (let slot = 0; slot < 2; slot++){
+    for (const h of game.hands){
+      await animateCardInto(h.dom.row, h.cards[slot], false);
+      h.dom.total.textContent = handValue(h.cards.slice(0, slot + 1));
+    }
+    await animateCardInto(dealerRow, game.dealerCards[slot], slot === 1);
+    if (slot === 0) updateDealerTotalHidden();
+  }
+
+  refreshHandSlotsStatus();
+}
+
+/** Reveal the dealer's hole card, then draw and animate in any further hits,
+ *  then settle the round. Runs once play moves out of the player's turn. */
+async function runDealerSequenceAndSettle(){
+  const dealerRow = document.getElementById('dealer-hand');
+
+  await sleep(300);
+  await flipDealerHoleCard(game.dealerCards[1]);
+  updateDealerTotalRevealed(2);
+
+  for (let i = 2; i < game.dealerCards.length; i++){
+    await animateCardInto(dealerRow, game.dealerCards[i], false);
+    updateDealerTotalRevealed(i + 1);
+  }
+
+  settleAndShowResults();
+}
+
+function settleAndShowResults(){
   const result = game.buildRoundResult();
   recordRound(account, result);
   refreshWalletHud();
-  renderTable();
+  refreshHandSlotsStatus();
 
   const netTotal = result.netResult;
   if (netTotal > 0) sfxWin(); else if (netTotal < 0) sfxLose();
@@ -259,15 +339,126 @@ function finishRound(){
   [btnHit, btnStand, btnDouble, btnSplit].forEach(b => b.hidden = true);
   btnNewRound.hidden = false;
 
+  isAnimating = false;
   runAchievementCheck();
 }
 
+/** Common tail for hit/stand/double/split: refresh the table, then either
+ *  hand control back to the player or run the dealer's turn. */
+async function afterEngineAction(){
+  refreshHandSlotsStatus();
+  if (game.phase === 'playerTurn'){
+    isAnimating = false;
+    updateActionButtons();
+    return;
+  }
+  await runDealerSequenceAndSettle();
+}
+
+async function startRoundFlow(){
+  if (isAnimating || betPerHand <= 0) return;
+  const totalWager = betPerHand * numHandsSelected;
+  if (totalWager > account.balance){
+    setMessage("You don't have enough chips for that wager.");
+    return;
+  }
+
+  isAnimating = true;
+  btnDeal.disabled = true;
+
+  const { reshuffled } = game.startRound(betPerHand, numHandsSelected);
+  setMessage(reshuffled ? 'Shoe reshuffled. New cards in play.' : '');
+
+  dockBetSetup.hidden = true;
+  dockActions.hidden = false;
+  btnNewRound.hidden = true;
+  [btnHit, btnStand, btnDouble, btnSplit].forEach(b => { b.hidden = false; b.disabled = true; });
+
+  await dealInitialRound();
+
+  if (game.phase === 'playerTurn'){
+    isAnimating = false;
+    updateActionButtons();
+  } else {
+    await runDealerSequenceAndSettle();
+  }
+}
+
+async function doHit(){
+  if (isAnimating || btnHit.disabled) return;
+  isAnimating = true; updateActionButtons();
+
+  const hand = game.activeHand();
+  game.hit();
+  await animateCardInto(hand.dom.row, hand.cards[hand.cards.length - 1], false);
+
+  await afterEngineAction();
+}
+
+async function doStand(){
+  if (isAnimating || btnStand.disabled) return;
+  isAnimating = true; updateActionButtons();
+
+  game.stand();
+  await afterEngineAction();
+}
+
+async function doDouble(){
+  if (isAnimating || btnDouble.disabled) return;
+  isAnimating = true; updateActionButtons();
+
+  const hand = game.activeHand();
+  game.double();
+  hand.dom.betChip.textContent = formatMoney(hand.bet);
+  await animateCardInto(hand.dom.row, hand.cards[hand.cards.length - 1], false);
+
+  await afterEngineAction();
+}
+
+async function doSplit(){
+  if (isAnimating || btnSplit.disabled) return;
+  isAnimating = true; updateActionButtons();
+
+  const originalHand = game.activeHand();
+  const originalIndex = game.activeHandIndex;
+  const movedCardEl = originalHand.dom.row.lastElementChild; // becomes the new hand's first card
+
+  game.split();
+
+  const newHand = game.hands[originalIndex + 1];
+  const newDom = ensureHandDom(newHand);
+  newDom.betChip.textContent = formatMoney(newHand.bet);
+  newDom.total.textContent = '';
+  newDom.outcome.textContent = '';
+
+  if (movedCardEl && movedCardEl.parentElement === originalHand.dom.row){
+    originalHand.dom.row.removeChild(movedCardEl);
+    newDom.row.appendChild(movedCardEl);
+  }
+  layoutPlayerArea();
+  markLastCard(originalHand.dom.row);
+  markLastCard(newDom.row);
+  originalHand.dom.total.textContent = handValue(originalHand.cards.slice(0, 1));
+  newDom.total.textContent = handValue(newHand.cards.slice(0, 1));
+
+  // deal the two cards the split draws, one at a time
+  await animateCardInto(originalHand.dom.row, originalHand.cards[originalHand.cards.length - 1], false);
+  originalHand.dom.total.textContent = handValue(originalHand.cards);
+
+  await animateCardInto(newDom.row, newHand.cards[newHand.cards.length - 1], false);
+  newDom.total.textContent = handValue(newHand.cards);
+
+  await afterEngineAction();
+}
+
 btnDeal.addEventListener('click', startRoundFlow);
-btnHit.addEventListener('click', () => { game.hit(); afterAction(); });
-btnStand.addEventListener('click', () => { game.stand(); afterAction(); });
-btnDouble.addEventListener('click', () => { game.double(); afterAction(); });
-btnSplit.addEventListener('click', () => { game.split(); afterAction(); });
+btnHit.addEventListener('click', doHit);
+btnStand.addEventListener('click', doStand);
+btnDouble.addEventListener('click', doDouble);
+btnSplit.addEventListener('click', doSplit);
+
 btnNewRound.addEventListener('click', () => {
+  if (isAnimating) return;
   game.reset();
   dockBetSetup.hidden = false;
   dockActions.hidden = true;
