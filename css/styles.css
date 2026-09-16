@@ -463,7 +463,10 @@ select, input{ font-family: inherit; }
   padding: 1px 2px 1px;
 }
 .card-corner.top-left{ top:3px; left:3px; }
-.card-corner.bottom-right{ bottom:3px; right:3px; transform: rotate(180deg); opacity: 0; transition: opacity .1s; }
+/* Right-side up, not the traditional rotated-180° bottom index — on a
+   single card facing the player straight-on (never handed to someone
+   across the table), an upside-down number just reads as illegible. */
+.card-corner.bottom-right{ bottom:3px; right:3px; opacity: 0; transition: opacity .1s; }
 .card.is-last .card-corner.bottom-right{ opacity: 1; }
 .card.red .card-corner, .card.red .pip, .card.red .face-portrait{ color: #b3372c; }
 .card.black .card-corner, .card.black .pip, .card.black .face-portrait{ color: #16161a; }
