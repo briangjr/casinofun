@@ -5,7 +5,7 @@
    ========================================================= */
 
 const STORAGE_KEY = 'royalVegas.account.v1';
-const STARTING_BALANCE = 1000;
+const STARTING_BALANCE = 100;
 const MAX_HISTORY = 300;
 
 function defaultState(){
@@ -13,6 +13,7 @@ function defaultState(){
     version: 1,
     createdAt: new Date().toISOString(),
     balance: STARTING_BALANCE,
+    bank: 0, // funds moved out of play — safe from the tables until withdrawn back
     settings: {
       decks: 6,
       felt: 'green',
@@ -54,6 +55,7 @@ function migrate(state){
   return {
     ...fresh,
     ...state,
+    bank: typeof state.bank === 'number' && isFinite(state.bank) ? state.bank : 0,
     settings: { ...fresh.settings, ...(state.settings || {}) },
     stats: { ...fresh.stats, ...(state.stats || {}) },
     history: Array.isArray(state.history) ? state.history : [],
@@ -91,6 +93,26 @@ function addFunds(state, amount){
   if (amount <= 0) return state;
   state.balance += amount;
   state.stats.totalAdded += amount;
+  saveState(state);
+  return state;
+}
+
+/** Move money out of play and into the bank, where it can't be wagered. */
+function depositToBank(state, amount){
+  amount = Math.max(0, Math.round(Number(amount) || 0));
+  if (amount <= 0 || amount > state.balance) return state;
+  state.balance -= amount;
+  state.bank += amount;
+  saveState(state);
+  return state;
+}
+
+/** Pull money back out of the bank and into the playable bankroll. */
+function withdrawFromBank(state, amount){
+  amount = Math.max(0, Math.round(Number(amount) || 0));
+  if (amount <= 0 || amount > state.bank) return state;
+  state.bank -= amount;
+  state.balance += amount;
   saveState(state);
   return state;
 }
