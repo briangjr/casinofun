@@ -329,6 +329,23 @@ select, input{ font-family: inherit; }
 }
 
 .hand-slot.is-active{ background: rgba(212,175,55,.1); box-shadow: 0 0 0 2px rgba(212,175,55,.5), 0 0 20px rgba(212,175,55,.25); }
+
+/* Zoomed-in play: while a multi-hand round is in progress, only the active
+   hand is on the felt — the rest wait offstage until it's their turn — so
+   that one hand gets a close-up instead of everything being squeezed into
+   one crowded row. Its cards get a size boost to make the close-up feel
+   deliberate rather than just "the others vanished". */
+.player-area.zoomed .hand-slot:not(.is-active){ display:none; }
+.player-area.zoomed{ gap: 0; }
+.player-area.zoomed .hand-slot.is-active{ min-width: 0; }
+.player-area.zoomed .hand-slot.is-active .card{ --cw: 74px; --ch: 104px; margin-left: -26px; }
+.player-area.zoomed .hand-slot.is-active .hand-row{ min-height: 108px; }
+.player-area.zoomed .hand-slot.is-active .hand-bet-chip{ font-size:.82rem; padding: 3px 14px; }
+.player-area.zoomed .hand-slot.is-active .hand-total{ font-size: 1.05rem; padding: 2px 14px; }
+.hand-progress{
+  text-align:center; font-size:.68rem; letter-spacing:.14em; text-transform:uppercase;
+  color: var(--gold-bright); font-weight:700; margin-top: -4px;
+}
 .hand-slot.is-bust .hand-total{ color: var(--loss); }
 .hand-slot.is-blackjack .hand-total{ color: var(--win); }
 .hand-slot .hand-row{ min-height: 88px; }
@@ -594,6 +611,14 @@ select, input{ font-family: inherit; }
   .hand-slot{ min-width: 90px; }
   .dock-label{ min-width: unset; }
   .stat-grid, .achv-grid{ grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); }
+  /* The "first move" preset picker on a waiting hand must never make that
+     hand-slot wider than its siblings — that's what threw the single-row
+     layout off (and clipped the picker at the screen edge) the moment a
+     hand became active/waiting instead of just-dealt. Capping it to the
+     hand-slot's own min-width keeps every hand the same width whether or
+     not its picker is showing. */
+  .preset-picker{ max-width: 90px; gap: 3px; }
+  .preset-btn{ font-size:.58rem; padding: 3px 6px; }
 }
 @media (max-height: 680px){
   .table-felt{ padding-top: 10px; }
