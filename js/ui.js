@@ -56,7 +56,8 @@ document.querySelectorAll('[data-nav]').forEach(el => {
 
 /* ---------------- wallet / lobby HUD ---------------- */
 function refreshWalletHud(){
-  document.getElementById('hud-balance').textContent = formatMoney(account.balance);
+  const text = formatMoney(account.balance);
+  document.querySelectorAll('.wallet-amount').forEach(el => { el.textContent = text; });
 }
 
 function renderLobby(){
@@ -107,6 +108,23 @@ const handCountValue = document.getElementById('hand-count-value');
 const tableMessage = document.getElementById('table-message');
 const tableFelt = document.querySelector('.table-felt');
 
+/** Before any cards are dealt, show empty betting-circle placeholders on the
+ *  felt for however many hands are currently selected — like a real table's
+ *  marked betting spots — instead of a blank stretch of green. */
+function renderBettingPreview(){
+  if (game.phase !== 'betting') return;
+  const area = document.getElementById('player-area');
+  area.innerHTML = '';
+  for (let i = 0; i < numHandsSelected; i++){
+    const slot = document.createElement('div');
+    slot.className = 'hand-slot betting-preview';
+    const row = document.createElement('div');
+    row.className = 'hand-row';
+    slot.appendChild(row);
+    area.appendChild(slot);
+  }
+}
+
 function updateBetSetupUI(){
   handCountValue.textContent = numHandsSelected;
   const total = betPerHand * numHandsSelected;
@@ -114,6 +132,7 @@ function updateBetSetupUI(){
   const overBudget = total > account.balance;
   betTotalDisplay.style.color = overBudget ? 'var(--loss)' : '';
   btnDeal.disabled = total <= 0 || overBudget;
+  renderBettingPreview();
 }
 
 document.getElementById('hand-count-stepper').addEventListener('click', e => {
