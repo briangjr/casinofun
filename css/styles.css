@@ -269,6 +269,10 @@ select, input{ font-family: inherit; }
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   background: rgba(5,10,8,.62); z-index: 20; border-radius: inherit;
 }
+/* Author CSS always beats the browser's built-in [hidden]{display:none} rule,
+   so without this the modal stayed visible (just non-interactive underneath)
+   any time JS set modal.hidden = true — this is the fix for that. */
+.insurance-modal[hidden]{ display:none; }
 .insurance-card{
   background: linear-gradient(160deg, var(--panel-2), var(--panel));
   border: 1px solid var(--gold); border-radius: var(--radius);
