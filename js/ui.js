@@ -321,6 +321,23 @@ function refreshHandSlotsStatus(){
   const active = game.activeHand();
   const spareBalance = account.balance - game.hands.reduce((s, h) => s + h.bet, 0);
 
+  // Multi-hand rounds "zoom in" to whichever hand is currently being played —
+  // the rest stay off-screen so the active hand and the dealer's cards get
+  // the full close-up view instead of everything being squeezed side by
+  // side. It zooms back out once play moves past the player's turn, so the
+  // full table (and every hand's outcome) is visible again for the result.
+  const area = document.getElementById('player-area');
+  const progress = document.getElementById('hand-progress');
+  const zoomed = game.hands.length > 1 && game.phase === 'playerTurn';
+  area.classList.toggle('zoomed', zoomed);
+  if (zoomed && active){
+    const idx = game.hands.indexOf(active) + 1;
+    progress.textContent = `Hand ${idx} of ${game.hands.length}`;
+    progress.hidden = false;
+  } else {
+    progress.hidden = true;
+  }
+
   game.hands.forEach(h => {
     const dom = ensureHandDom(h);
     dom.betChip.textContent = formatMoney(h.bet);
