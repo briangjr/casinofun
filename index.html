@@ -30,9 +30,15 @@
       <button class="navbtn" data-nav="settings">Settings</button>
     </nav>
 
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
 
@@ -57,6 +63,10 @@
         <div class="hero-stat">
           <div class="hero-stat-label">Added To Date</div>
           <div class="hero-stat-value" id="lobby-added">$0</div>
+        </div>
+        <div class="hero-stat hero-stat-bank" data-nav-bank>
+          <div class="hero-stat-label">In The Bank</div>
+          <div class="hero-stat-value" id="lobby-bank">$0</div>
         </div>
       </div>
     </div>
@@ -94,9 +104,15 @@
   <header class="screen-subheader">
     <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
     <div class="subnav-title">Blackjack</div>
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
   <div class="table-room">
@@ -181,9 +197,15 @@
   <header class="screen-subheader">
     <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
     <div class="subnav-title">Slots</div>
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
   <div class="coming-soon">
@@ -199,9 +221,15 @@
   <header class="screen-subheader">
     <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
     <div class="subnav-title">Hand History</div>
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
   <div class="panel">
@@ -228,9 +256,15 @@
   <header class="screen-subheader">
     <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
     <div class="subnav-title">Achievements</div>
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
   <div class="panel">
@@ -247,9 +281,15 @@
   <header class="screen-subheader">
     <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
     <div class="subnav-title">Settings</div>
-    <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
-      <span class="chip-ico">🪙</span>
-      <span class="wallet-amount">$0</span>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+        <span class="bank-amount">$0</span>
+      </button>
     </div>
   </header>
   <div class="panel panel-settings">
@@ -273,6 +313,16 @@
         <button class="btn btn-ghost quick-add" data-amt="1000">+$1,000</button>
         <button class="btn btn-ghost quick-add" data-amt="5000">+$5,000</button>
       </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Bank</h3>
+      <p class="settings-help">Money you don't want to risk. Move it to the bank to keep it out of play &mdash; withdraw it back to your bankroll whenever you want to play with it again.</p>
+      <div class="settings-row">
+        <span>Currently Banked</span>
+        <strong id="settings-bank-balance">$0</strong>
+      </div>
+      <button class="btn btn-ghost" id="btn-open-bank-settings">Open Bank</button>
     </div>
 
     <div class="settings-block">
@@ -320,12 +370,42 @@
 
     <div class="settings-block danger-block">
       <h3>Reset</h3>
-      <p class="settings-help">Wipes balance, lifetime stats, history and achievements back to a fresh account. This cannot be undone.</p>
+      <p class="settings-help">Wipes balance, bank, lifetime stats, history and achievements back to a fresh account. This cannot be undone.</p>
       <button class="btn btn-danger" id="btn-reset-all">Reset Entire Account</button>
     </div>
     </div>
   </div>
 </main>
+
+<!-- ================= BANK (accessible from every screen) ================= -->
+<div class="bank-modal" id="bank-modal" hidden>
+  <div class="bank-card">
+    <button class="bank-close" id="btn-bank-close" title="Close" aria-label="Close">&times;</button>
+    <h3>🏦 Your Bank</h3>
+    <p class="bank-blurb">Money in the bank is safe from the tables &mdash; it can't be wagered until you withdraw it back to your bankroll.</p>
+
+    <div class="bank-balances">
+      <div class="bank-balance-tile">
+        <div class="bank-balance-label">Bankroll</div>
+        <div class="bank-balance-value" id="bank-modal-balance">$0</div>
+      </div>
+      <div class="bank-balance-tile bank-balance-tile-bank">
+        <div class="bank-balance-label">Banked</div>
+        <div class="bank-balance-value" id="bank-modal-bank">$0</div>
+      </div>
+    </div>
+
+    <div class="bank-action-row">
+      <input type="number" id="bank-deposit-input" min="1" step="1" placeholder="Amount" />
+      <button class="btn btn-gold" id="btn-bank-deposit">Move to Bank</button>
+    </div>
+    <div class="bank-action-row">
+      <input type="number" id="bank-withdraw-input" min="1" step="1" placeholder="Amount" />
+      <button class="btn btn-ghost" id="btn-bank-withdraw">Withdraw to Bankroll</button>
+    </div>
+    <p class="bank-error" id="bank-error" hidden></p>
+  </div>
+</div>
 
 <!-- toast for achievement unlocks -->
 <div class="toast-stack" id="toast-stack"></div>
