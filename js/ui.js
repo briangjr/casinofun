@@ -54,10 +54,17 @@ document.querySelectorAll('[data-nav]').forEach(el => {
   el.addEventListener('click', () => goTo(el.dataset.nav));
 });
 
-/* ---------------- wallet / lobby HUD ---------------- */
+/* ---------------- wallet / bank / lobby HUD ---------------- */
 function refreshWalletHud(){
-  const text = formatMoney(account.balance);
-  document.querySelectorAll('.wallet-amount').forEach(el => { el.textContent = text; });
+  const balanceText = formatMoney(account.balance);
+  const bankText = formatMoney(account.bank);
+  document.querySelectorAll('.wallet-amount').forEach(el => { el.textContent = balanceText; });
+  document.querySelectorAll('.bank-amount').forEach(el => { el.textContent = bankText; });
+  const lobbyBank = document.getElementById('lobby-bank');
+  if (lobbyBank) lobbyBank.textContent = bankText;
+  const settingsBank = document.getElementById('settings-bank-balance');
+  if (settingsBank) settingsBank.textContent = bankText;
+  refreshBankModal();
 }
 
 function renderLobby(){
@@ -68,7 +75,70 @@ function renderLobby(){
   netEl.style.color = net > 0 ? 'var(--win)' : (net < 0 ? 'var(--loss)' : '');
   document.getElementById('lobby-hands').textContent = account.stats.handsPlayed.toLocaleString('en-US');
   document.getElementById('lobby-added').textContent = formatMoney(account.stats.totalAdded);
+  document.getElementById('lobby-bank').textContent = formatMoney(account.bank);
 }
+
+/* ---------------- bank (move money out of play, and back) ---------------- */
+const bankModal = document.getElementById('bank-modal');
+
+function refreshBankModal(){
+  const balEl = document.getElementById('bank-modal-balance');
+  const bankEl = document.getElementById('bank-modal-bank');
+  if (balEl) balEl.textContent = formatMoney(account.balance);
+  if (bankEl) bankEl.textContent = formatMoney(account.bank);
+}
+
+function showBankError(msg){
+  const el = document.getElementById('bank-error');
+  el.textContent = msg;
+  el.hidden = !msg;
+}
+
+function openBank(){
+  refreshBankModal();
+  showBankError('');
+  document.getElementById('bank-deposit-input').value = '';
+  document.getElementById('bank-withdraw-input').value = '';
+  bankModal.hidden = false;
+}
+
+function closeBank(){
+  bankModal.hidden = true;
+}
+
+document.querySelectorAll('.bank-pill, [data-nav-bank], #btn-open-bank-settings').forEach(el => {
+  el.addEventListener('click', openBank);
+});
+document.getElementById('btn-bank-close').addEventListener('click', closeBank);
+bankModal.addEventListener('click', e => { if (e.target === bankModal) closeBank(); });
+
+document.getElementById('btn-bank-deposit').addEventListener('click', () => {
+  const input = document.getElementById('bank-deposit-input');
+  const amt = Math.round(parseFloat(input.value));
+  if (!amt || amt <= 0){ showBankError('Enter an amount to move to the bank.'); return; }
+  if (amt > account.balance){ showBankError("You don't have that much in your bankroll."); return; }
+  depositToBank(account, amt);
+  input.value = '';
+  showBankError('');
+  refreshWalletHud();
+  renderLobby();
+  renderSettings();
+  updateBetSetupUI();
+});
+
+document.getElementById('btn-bank-withdraw').addEventListener('click', () => {
+  const input = document.getElementById('bank-withdraw-input');
+  const amt = Math.round(parseFloat(input.value));
+  if (!amt || amt <= 0){ showBankError('Enter an amount to withdraw.'); return; }
+  if (amt > account.bank){ showBankError("You don't have that much banked."); return; }
+  withdrawFromBank(account, amt);
+  input.value = '';
+  showBankError('');
+  refreshWalletHud();
+  renderLobby();
+  renderSettings();
+  updateBetSetupUI();
+});
 
 /* ---------------- toasts ---------------- */
 function showToast(achv){
@@ -714,6 +784,7 @@ function renderAchievements(){
    ================================================================== */
 function renderSettings(){
   document.getElementById('settings-balance').textContent = formatMoney(account.balance);
+  document.getElementById('settings-bank-balance').textContent = formatMoney(account.bank);
   document.getElementById('setting-decks').value = account.settings.decks;
   document.getElementById('setting-felt').value = account.settings.felt;
   document.getElementById('setting-sound').checked = account.settings.sound;
@@ -785,7 +856,7 @@ document.getElementById('setting-speed').addEventListener('change', e => {
 });
 
 document.getElementById('btn-reset-all').addEventListener('click', () => {
-  const ok = window.confirm('Reset your entire account? This wipes your balance, lifetime stats, history and achievements. This cannot be undone.');
+  const ok = window.confirm('Reset your entire account? This wipes your balance, bank, lifetime stats, history and achievements. This cannot be undone.');
   if (!ok) return;
   account = resetAccount();
   game = new BlackjackGame(account.settings.decks);
