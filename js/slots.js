@@ -175,7 +175,13 @@ function sizeReels(colRows){
   const PAD = 8, GAP = 5;
   const availW = window_.clientWidth - PAD * 2 - GAP * (REEL_COUNT - 1);
   const availH = window_.clientHeight - PAD * 2;
-  cwPx = Math.max(30, Math.min(92, Math.floor(availW / REEL_COUNT)));
+  // 92px was tuned for a narrow portrait phone width; on a wide-but-short
+  // landscape layout (reel cabinet next to the dock, not above it) the
+  // available width per column is much larger, so let the clamp track the
+  // available height too instead of hard-capping at the portrait value —
+  // otherwise landscape leaves big empty gutters beside the reels.
+  const cwCap = Math.max(92, Math.min(150, Math.floor(availH / 2.2)));
+  cwPx = Math.max(30, Math.min(cwCap, Math.floor(availW / REEL_COUNT)));
   window_.style.setProperty('--cw', cwPx + 'px');
   rhPxByCol = colRows.map(rows => Math.max(20, Math.floor(availH / rows)));
   reelEls.forEach((re, c) => {
