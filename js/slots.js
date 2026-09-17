@@ -134,6 +134,7 @@ function buildSymbolCellEl(key, wildMult){
 let reelEls = []; // { col, mask, strip }
 let cwPx = 64; // current cell width (shared by every column), recomputed each spin
 let rhPxByCol = []; // current cell height PER COLUMN — see sizeReels()
+let fillerCountByCol = []; // how many filler cells precede the final rows in each column's strip THIS spin — needed to map a final row index back to its DOM cell for win highlighting
 
 function initSlotsReels(){
   const window_ = document.getElementById('reel-window');
@@ -220,40 +221,40 @@ function generateSpin(){
    walk columns left to right; a column counts as a match if ANY of its
    rows (each column can have a different row count, 2-7) holds that
    symbol or a wild. The longest unbroken run from column 0 that reaches
-   3+ pays at that symbol's tier. */
+   3+ pays at that symbol's tier. Each win also records exactly which
+   cells ("c,r") made it match, so only those specific tiles — not the
+   whole column — get highlighted afterward. */
 function evaluateWins(columns, wildMultByCell){
-  const wins = []; // { key, count, amount, cols:[...], wildMult }
+  const wins = []; // { key, count, amountCents, wildMult, cells:["c,r", ...] }
   const candidates = [...Object.keys(SLOT_SYMBOLS), 'wild'];
 
   for (const key of candidates){
     let run = 0;
     let bestWildMult = 1;
+    const winningCells = [];
     for (let c = 0; c < REEL_COUNT; c++){
       let matched = false;
-      let wildHere = false;
+      const cellsThisCol = [];
       for (let r = 0; r < columns[c].length; r++){
         const cell = columns[c][r];
         if (cell === key || cell === 'wild'){
           matched = true;
-          if (cell === 'wild') wildHere = true;
-        }
-      }
-      if (!matched) break;
-      if (wildHere){
-        for (let r = 0; r < columns[c].length; r++){
-          if (columns[c][r] === 'wild'){
+          cellsThisCol.push(r);
+          if (cell === 'wild'){
             const m = wildMultByCell[c + ',' + r];
             if (m && m > bestWildMult) bestWildMult = m;
           }
         }
       }
+      if (!matched) break;
+      cellsThisCol.forEach(r => winningCells.push(c + ',' + r));
       run++;
     }
     if (run >= 3){
       const data = key === 'wild' ? WILD : SLOT_SYMBOLS[key];
       const payMult = data.pay[Math.min(run, 5) - 3];
       const amountCents = Math.round(currentBetCents() * payMult * bestWildMult);
-      wins.push({ key, count: run, amountCents, wildMult: bestWildMult });
+      wins.push({ key, count: run, amountCents, wildMult: bestWildMult, cells: winningCells });
     }
   }
   return wins;
@@ -294,12 +295,14 @@ function refreshSlotsHud(){
   document.getElementById('fs-count').textContent = freeSpinsRemaining;
 }
 
-/* `fast` (turbo) spins this column in a fraction of the time with a
-   shorter filler strip so it still visibly "spins" rather than jump-
-   cutting to the result — used for every column except one where a
-   2-coin near miss is still undecided (see doSpin), which always plays
-   at normal speed so that moment keeps its suspense. */
-async function spinColumn(c, finalSymbols, wildMultByCell, fast){
+/* All 5 columns kick off their spin transform at the same moment (see
+   doSpin) — what makes them stop in order, left to right, is each one
+   getting a different transition `duration` (an absolute time from that
+   shared start, already staggered by doSpin's stopAt[] schedule). The
+   filler strip length scales with duration too, so a column spinning
+   for longer scrolls through proportionally more symbols instead of
+   just crawling slower over the same short distance. */
+async function spinColumn(c, finalSymbols, wildMultByCell, duration, fast){
   const { strip } = reelEls[c];
   const rows = finalSymbols.length;
 
@@ -307,7 +310,9 @@ async function spinColumn(c, finalSymbols, wildMultByCell, fast){
   // as the last `rows` cells, so it looks like it's spinning through and
   // then lands exactly on the result.
   strip.innerHTML = '';
-  const fillerCount = fast ? Math.max(3, Math.round((8 + rows) / 3)) : 8 + rows;
+  const rowsPerSecond = fast ? 46 : 20;
+  const fillerCount = Math.max(fast ? 3 : 6, Math.round((duration / 1000) * rowsPerSecond));
+  fillerCountByCol[c] = fillerCount;
   for (let i = 0; i < fillerCount; i++) strip.appendChild(buildSymbolCellEl(rollWeightedSymbol(), null));
   for (let r = 0; r < rows; r++){
     const key = finalSymbols[r];
@@ -320,12 +325,11 @@ async function spinColumn(c, finalSymbols, wildMultByCell, fast){
   strip.style.transform = 'translateY(0px)';
   // eslint-disable-next-line no-unused-expressions
   strip.offsetHeight; // force reflow so the transition below actually animates
-  const duration = fast ? 70 + c * 15 : 480 + c * 140;
   strip.style.transition = `transform ${duration}ms cubic-bezier(.2,.7,.25,1)`;
   strip.style.transform = `translateY(-${travel}px)`;
-  beep(300 + c * 20, 0.05, 'triangle', 0.03);
 
   await new Promise(resolve => setTimeout(resolve, duration));
+  beep(300 + c * 20, 0.05, 'triangle', 0.03); // a little "tick" as this reel locks in
 }
 
 function updateNearMiss(coinCols, stoppedThrough){
@@ -348,23 +352,46 @@ async function doSpin(){
 
   setSpinBusy(true);
   document.getElementById('slots-win-display').hidden = true;
-  reelEls.forEach(re => re.col.classList.remove('win-glow', 'near-miss'));
+  reelEls.forEach(re => {
+    re.col.classList.remove('near-miss');
+    re.strip.querySelectorAll('.win-glow').forEach(el => el.classList.remove('win-glow'));
+  });
   setMessage(inFreeSpins ? `Free spin — ${freeSpinsRemaining} left` : 'Spinning…');
 
   const spin = generateSpin();
   sizeReels(spin.colRows);
+
+  // All 5 reels start spinning at the same instant. What makes them stop
+  // left-to-right is that each column's transition just runs for longer
+  // than the one before it — stopAt[c] is that column's absolute
+  // duration from the shared start. Normally each stop is 400ms after
+  // the previous one; turbo compresses that gap way down. A column
+  // where a 2-coin near miss is still undecided always uses the normal
+  // (non-turbo) gap for its own stop, so that reveal keeps its suspense
+  // even mid-turbo-spin — and everything after it inherits the later
+  // absolute time that produces, so the order is never violated.
+  const NORMAL_BASE = 500, NORMAL_GAP = 400;
+  const TURBO_BASE = 70, TURBO_GAP = 90;
+  const stopAt = [];
+  const fastFlags = [];
+  let cumulative = 0;
   for (let c = 0; c < REEL_COUNT; c++){
-    // Coins are rolled for the whole spin up front, so we already know
-    // whether this column is the undecided one in a 2-coin near miss —
-    // that column (and any still-undecided ones after it) always plays
-    // at normal speed even with turbo on, so the "just need one more"
-    // moment isn't blown past instantly.
     const coinsBefore = spin.coinCols.slice(0, c).filter(Boolean).length;
     const nearMissActive = coinsBefore === 2;
     const fast = turboEnabled && !nearMissActive;
-    await spinColumn(c, spin.columns[c], spin.wildMultByCell, fast);
-    updateNearMiss(spin.coinCols, c);
+    fastFlags.push(fast);
+    if (c === 0){
+      cumulative = fast ? TURBO_BASE : NORMAL_BASE;
+    } else {
+      cumulative += fast ? TURBO_GAP : NORMAL_GAP;
+    }
+    stopAt.push(cumulative);
   }
+
+  await Promise.all(reelEls.map((re, c) =>
+    spinColumn(c, spin.columns[c], spin.wildMultByCell, stopAt[c], fastFlags[c])
+      .then(() => updateNearMiss(spin.coinCols, c))
+  ));
   reelEls.forEach(re => re.col.classList.remove('near-miss'));
 
   const wins = evaluateWins(spin.columns, spin.wildMultByCell);
@@ -376,7 +403,7 @@ async function doSpin(){
     saveState(account);
     refreshWalletHud();
     if (inFreeSpins) freeSpinsSessionWin += totalWinCents;
-    highlightWinningColumns(wins, spin.columns);
+    highlightWinningTiles(wins);
     document.getElementById('slots-win-amount').textContent = formatCents(totalWinCents);
     document.getElementById('slots-win-display').hidden = false;
     setMessage(describeWins(wins));
@@ -394,9 +421,22 @@ async function doSpin(){
   setSpinBusy(false);
 }
 
-function highlightWinningColumns(wins, columns){
-  const maxRun = Math.max(...wins.map(w => w.count));
-  for (let c = 0; c < maxRun; c++) reelEls[c].col.classList.add('win-glow');
+/* Highlights only the exact tiles that made up a win (see evaluateWins'
+   `cells` list) — not the whole column — since a column can have several
+   rows and only some of them (or just one) are actually part of the
+   match. A strip's DOM order is [...fillerCells, ...finalRowCells], so
+   final row r lives at child index fillerCountByCol[c] + r. */
+function highlightWinningTiles(wins){
+  const winningCells = new Set();
+  wins.forEach(w => w.cells.forEach(ck => winningCells.add(ck)));
+  reelEls.forEach((re, c) => {
+    const filler = fillerCountByCol[c] || 0;
+    const cellEls = re.strip.children;
+    for (let r = 0; filler + r < cellEls.length; r++){
+      const symEl = cellEls[filler + r].querySelector('.reel-symbol');
+      if (symEl) symEl.classList.toggle('win-glow', winningCells.has(c + ',' + r));
+    }
+  });
 }
 
 function describeWins(wins){
