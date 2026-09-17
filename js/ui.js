@@ -234,7 +234,7 @@ function markLastCard(rowEl){
   if (cards.length) cards[cards.length - 1].classList.add('is-last');
 }
 
-function setMessage(msg){
+function setTableMessage(msg){
   tableMessage.textContent = msg;
 }
 
@@ -497,9 +497,9 @@ function settleAndShowResults(){
   const netTotal = result.netResult;
   if (netTotal > 0) sfxWin(); else if (netTotal < 0) sfxLose();
 
-  if (netTotal > 0) setMessage(`You won ${formatMoney(netTotal)} this round!`);
-  else if (netTotal < 0) setMessage(`You lost ${formatMoney(Math.abs(netTotal))} this round.`);
-  else setMessage('Push — bets returned.');
+  if (netTotal > 0) setTableMessage(`You won ${formatMoney(netTotal)} this round!`);
+  else if (netTotal < 0) setTableMessage(`You lost ${formatMoney(Math.abs(netTotal))} this round.`);
+  else setTableMessage('Push — bets returned.');
 
   [btnHit, btnStand, btnDouble, btnSplit].forEach(b => b.hidden = true);
   btnNewRound.hidden = false;
@@ -638,7 +638,7 @@ async function handleInsurance(){
   await offerInsurance();
 
   if (game.dealerHasBlackjack()){
-    setMessage('Dealer checks the hole card…');
+    setTableMessage('Dealer checks the hole card…');
     await sleep(400);
     await flipDealerHoleCard(game.dealerCards[1]);
     updateDealerTotalRevealed(2);
@@ -650,7 +650,7 @@ async function handleInsurance(){
   }
 
   if (game.insuranceBet > 0){
-    setMessage('Dealer checks the hole card… no blackjack. Insurance lost.');
+    setTableMessage('Dealer checks the hole card… no blackjack. Insurance lost.');
   }
   return false;
 }
@@ -659,7 +659,7 @@ async function startRoundFlow(){
   if (isAnimating || betPerHand <= 0) return;
   const totalWager = betPerHand * numHandsSelected;
   if (totalWager > account.balance){
-    setMessage("You don't have enough chips for that wager.");
+    setTableMessage("You don't have enough chips for that wager.");
     return;
   }
 
@@ -668,7 +668,7 @@ async function startRoundFlow(){
   btnDeal.disabled = true;
 
   const { reshuffled } = game.startRound(betPerHand, numHandsSelected);
-  setMessage(reshuffled ? 'Shoe reshuffled. New cards in play.' : '');
+  setTableMessage(reshuffled ? 'Shoe reshuffled. New cards in play.' : '');
 
   dockBetSetup.hidden = true;
   dockActions.hidden = false;
@@ -731,7 +731,7 @@ btnNewRound.addEventListener('click', () => {
   document.getElementById('insurance-modal').hidden = true;
   dockBetSetup.hidden = false;
   dockActions.hidden = true;
-  setMessage('');
+  setTableMessage('');
   document.getElementById('dealer-hand').innerHTML = '';
   document.getElementById('dealer-total').textContent = '';
   document.getElementById('player-area').innerHTML = '';

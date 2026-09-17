@@ -73,8 +73,17 @@ class BlackjackGame {
     this.phase = 'playerTurn';
     this.activeHandIndex = this.hands.findIndex(h => h.status === 'active');
 
-    // If every hand is already a natural blackjack, skip straight to dealer turn.
-    if (this.activeHandIndex === -1) this.phase = 'dealerTurn';
+    // If every hand is already a natural blackjack, there's nothing left to
+    // play — settle right here. Every other way a round ends (hit/stand/
+    // double/split) runs through advanceTurn(), which calls playDealer()
+    // and that calls settle() for us; this is the one path that skips
+    // straight past the player's turn, so without an explicit settle() call
+    // here each hand keeps its default null outcome / $0 net forever — the
+    // round just shows "New Round" with no payout, even on a real blackjack.
+    if (this.activeHandIndex === -1){
+      this.phase = 'dealerTurn';
+      this.settle();
+    }
 
     return { reshuffled };
   }
