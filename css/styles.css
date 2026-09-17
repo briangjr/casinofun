@@ -103,13 +103,16 @@ select, input{ font-family: inherit; }
 
 .hud-group{ display:flex; align-items:center; gap: 8px; }
 .bank-pill{
-  display:flex; align-items:center; gap:7px;
+  display:flex; align-items:center; justify-content:center; gap:7px;
   background: linear-gradient(180deg, #1c2430, #10151c);
   border: 1px solid rgba(140,180,220,.35);
-  padding: 6px 14px; border-radius: 999px; cursor:pointer;
+  padding: 6px 12px; border-radius: 999px; cursor:pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
   color: inherit; font-family: inherit;
 }
+/* The bank balance itself only shows inside the bank modal (and the
+   lobby/settings account overview) now — not in this always-visible
+   header pill, which is just an icon button to open it. */
 .bank-pill:hover{ border-color: rgba(140,180,220,.6); background: linear-gradient(180deg, #212b39, #141b24); }
 .bank-amount{ font-weight:800; color: #a9cdf0; font-variant-numeric: tabular-nums; font-size:.92rem; }
 
@@ -1016,6 +1019,290 @@ select, input{ font-family: inherit; }
 }
 
 /* =========================================================
+   NEON OVERDRIVE — 7-reel cyberpunk slots
+   Deliberately a totally different palette/feel from Sunset Stampede's
+   warm gold/sunset theme: black background, saturated neon accents, glow
+   everywhere instead of felt/wood texture. All its classes are prefixed
+   `neon-` and it reuses only genuinely generic shared components (.btn,
+   .dock-row, .stepper, .bonus-modal shell, .confetti-piece, etc.) — see
+   the header comment in js/neon.js for why the prefixing matters.
+   ========================================================= */
+:root{
+  --neon-bg-0: #050308;
+  --neon-cyan: #2ee6ff;
+  --neon-pink: #ff2ec4;
+  --neon-purple: #7c5cff;
+  --neon-yellow: #ffdd2e;
+  --neon-green: #2effa0;
+  --neon-orange: #ff6b2e;
+}
+
+.neon-subheader{
+  border-bottom: 1px solid rgba(46,230,255,.25);
+  background: linear-gradient(180deg, rgba(124,92,255,.08), transparent);
+}
+.neon-subheader .subnav-title{ color: rgba(46,230,255,.7); }
+
+.neon-room{
+  flex: 1 1 auto; min-height: 0; display:flex; flex-direction:column;
+  max-width: 720px; width:100%; margin: 0 auto; padding: 8px 14px 10px; gap: 8px;
+}
+.neon-cabinet{
+  position: relative;
+  flex: 1 1 auto; min-height: 0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap: clamp(6px, 2vh, 16px);
+  border-radius: 22px;
+  padding: 14px 12px 10px;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(124,92,255,.22), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(46,230,255,.12), transparent 60%),
+    linear-gradient(180deg, #0c0714 0%, #08050f 40%, var(--neon-bg-0) 100%);
+  border: 2px solid rgba(46,230,255,.35);
+  box-shadow: var(--shadow-lg), inset 0 0 0 1px rgba(255,46,196,.15), 0 0 30px rgba(46,230,255,.12), inset 0 0 60px rgba(0,0,0,.7);
+  overflow: hidden;
+}
+.neon-cabinet::before{
+  content:''; position:absolute; left:0; right:0; top:0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-pink), var(--neon-purple), transparent);
+  opacity: .8;
+}
+
+.neon-marquee{ flex: 0 0 auto; width: 100%; display:flex; align-items:center; justify-content:center; gap: 10px; position: relative; }
+.neon-logo{ text-align:center; line-height:1.15; }
+.neon-logo-main{
+  display:block; font-family:'Cinzel Decorative', serif; font-weight:700;
+  font-size: clamp(1.05rem, 4.2vw, 1.4rem); letter-spacing:.03em; color: var(--neon-cyan);
+  text-shadow: 0 0 8px rgba(46,230,255,.7), 0 0 22px rgba(46,230,255,.35);
+}
+.neon-logo-main span{ color: var(--neon-pink); text-shadow: 0 0 8px rgba(255,46,196,.7), 0 0 22px rgba(255,46,196,.35); }
+.neon-logo-sub{ display:block; font-size:.58rem; letter-spacing:.2em; text-transform:uppercase; color: rgba(124,92,255,.85); margin-top: 2px; }
+.neon-paytable-btn{ border-color: rgba(46,230,255,.4); color: var(--neon-cyan); }
+.neon-paytable-btn:hover{ background: var(--neon-cyan); color:#050308; }
+
+.neon-free-spins-banner{ border-color: rgba(255,46,196,.4); background: linear-gradient(180deg, rgba(255,46,196,.14), rgba(124,92,255,.06)); }
+.neon-free-spins-banner .fs-label{ color: var(--neon-pink); }
+.neon-free-spins-banner .fs-count{ color: var(--neon-cyan); text-shadow: 0 0 8px rgba(46,230,255,.6); }
+
+.neon-reel-window{
+  flex: 1 1 auto; min-height: 0; width: 100%; min-width: 0;
+  display:flex; justify-content:center; align-items:center; gap: 4px;
+  padding: 6px; border-radius: 14px; box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35));
+  border: 2px solid rgba(124,92,255,.4);
+  box-shadow: inset 0 4px 18px rgba(0,0,0,.75);
+  position: relative; overflow: hidden;
+}
+.neon-reel-col{ display:flex; flex-direction:column; }
+.neon-reel-mask{
+  width: var(--ncw);
+  overflow: hidden; position: relative; border-radius: 7px;
+  background: linear-gradient(180deg, #191227, #0d0817);
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.35);
+  transition: box-shadow .15s ease;
+}
+.neon-reel-col.near-miss .neon-reel-mask{
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.35), 0 0 0 3px rgba(46,230,255,.85), 0 0 16px rgba(46,230,255,.7);
+  animation: neonNearMissPulse .5s ease-in-out infinite;
+}
+@keyframes neonNearMissPulse{ 0%,100%{ filter: brightness(1); } 50%{ filter: brightness(1.4); } }
+.neon-reel-strip{ position:absolute; left:0; top:0; width:100%; will-change: transform; }
+.neon-reel-cell{
+  width: var(--ncw); height: var(--nrh);
+  display:flex; align-items:center; justify-content:center;
+  padding: 2px; box-sizing: border-box;
+}
+.neon-reel-symbol{
+  width: 100%; height: 100%; box-sizing: border-box;
+  display:flex; align-items:center; justify-content:center;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.4));
+  position: relative; border-radius: 14%; overflow: hidden;
+  font-size: min(calc(var(--nrh) * .58), calc(var(--ncw) * .76));
+  line-height: 1; color:#fff;
+}
+.neon-reel-symbol::before{
+  content:''; position:absolute; inset:0; border-radius: inherit; pointer-events:none; z-index:2;
+  background: linear-gradient(160deg, rgba(255,255,255,.18) 0%, rgba(255,255,255,.04) 32%, rgba(255,255,255,0) 55%);
+}
+.neon-reel-symbol > *{ position:relative; z-index:1; }
+
+.neon-reel-symbol.win-glow{
+  outline: 3px solid rgba(46,255,160,.95);
+  outline-offset: 2px; z-index: 4;
+  animation: neonWinTilePulse .8s ease-in-out infinite;
+}
+@keyframes neonWinTilePulse{
+  0%,100%{ outline-color: rgba(46,255,160,.55); transform: scale(1); }
+  50%{ outline-color: rgba(46,255,160,1); transform: scale(1.05); }
+}
+
+/* Shapes — the low tier, styled as glowing neon-outline chips rather
+   than the card-rank badges Sunset Stampede uses. */
+.neon-shape-badge{
+  font-weight:800; background: #120c1f;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 2px 6px rgba(0,0,0,.4);
+  font-size: min(calc(var(--nrh) * .5), calc(var(--ncw) * .64));
+}
+.neon-shape-diamond{ color: var(--neon-cyan); box-shadow: inset 0 0 0 1.5px rgba(46,230,255,.55), 0 0 10px rgba(46,230,255,.35); }
+.neon-shape-triangle{ color: var(--neon-pink); box-shadow: inset 0 0 0 1.5px rgba(255,46,196,.55), 0 0 10px rgba(255,46,196,.35); }
+.neon-shape-circle{ color: var(--neon-green); box-shadow: inset 0 0 0 1.5px rgba(46,255,160,.55), 0 0 10px rgba(46,255,160,.35); }
+.neon-shape-square{ color: var(--neon-yellow); box-shadow: inset 0 0 0 1.5px rgba(255,221,46,.55), 0 0 10px rgba(255,221,46,.35); }
+
+/* Icons — rarity tiers, common -> top, each a distinct neon color family
+   (same idea as Sunset Stampede's tiers, different palette entirely). */
+.neon-reel-symbol.neon-icon-symbol{ font-size: min(calc(var(--nrh) * .64), calc(var(--ncw) * .82)); }
+.neon-reel-symbol.neon-icon-symbol.tier-common{
+  background: linear-gradient(165deg, #223247, #16202f 60%, #0a1119);
+  box-shadow: inset 0 0 0 1.5px rgba(80,150,200,.5), 0 0 8px rgba(80,150,200,.25), 0 2px 5px rgba(0,0,0,.3);
+}
+.neon-reel-symbol.neon-icon-symbol.tier-uncommon{
+  background: linear-gradient(165deg, #2c1f47, #1c1430 60%, #0c0918);
+  box-shadow: inset 0 0 0 1.5px rgba(150,110,230,.55), 0 0 10px rgba(150,110,230,.3), 0 2px 6px rgba(0,0,0,.3);
+}
+.neon-reel-symbol.neon-icon-symbol.tier-rare{
+  background: linear-gradient(165deg, #451f3f, #2c1329 60%, #140813);
+  box-shadow: inset 0 0 0 1.5px rgba(255,80,210,.6), 0 0 14px rgba(255,80,210,.4), 0 2px 6px rgba(0,0,0,.3);
+}
+.neon-reel-symbol.neon-icon-symbol.tier-top{
+  background: linear-gradient(165deg, #4a2810, #2b1608 60%, #140a04);
+  box-shadow: inset 0 0 0 2px rgba(255,180,60,.85), 0 0 18px rgba(255,140,40,.55), 0 2px 6px rgba(0,0,0,.35);
+}
+.neon-reel-symbol.neon-icon-symbol.tier-top::after,
+.neon-reel-symbol.neon-wild-symbol::after,
+.neon-reel-symbol.neon-core-symbol::after,
+.neon-reel-symbol.neon-glitch-symbol::after{
+  content:''; position:absolute; inset:0; z-index: 1; pointer-events:none;
+  background: linear-gradient(115deg, transparent 32%, rgba(255,255,255,.5) 48%, transparent 64%);
+  background-size: 240% 240%; background-position: -140% -140%;
+  animation: neonShimmerSweep 2.6s ease-in-out infinite;
+}
+@keyframes neonShimmerSweep{
+  0%{ background-position: -140% -140%; }
+  55%, 100%{ background-position: 140% 140%; }
+}
+
+.neon-reel-symbol.neon-wild-symbol{
+  background: radial-gradient(circle at 38% 26%, #fff6b8, var(--neon-yellow) 45%, #b87a00 100%);
+  box-shadow: 0 0 14px rgba(255,221,46,.6), inset 0 1px 0 rgba(255,255,255,.4), inset 0 0 0 2px rgba(255,240,170,.5);
+  font-size: min(calc(var(--nrh) * .68), calc(var(--ncw) * .86));
+  filter: drop-shadow(0 0 8px rgba(255,221,46,.6));
+}
+.neon-wild-mult{
+  position:absolute; bottom:2px; right:2px; z-index: 3;
+  background: linear-gradient(180deg, var(--neon-cyan), #1499b8);
+  color:#04141a; font-size: calc(min(var(--ncw), var(--nrh)) * .2); font-weight:900; border-radius: 999px;
+  padding: 1px 5px; box-shadow: 0 2px 6px rgba(0,0,0,.4); font-family:'Inter',sans-serif; line-height: 1.4;
+}
+.neon-reel-symbol.neon-core-symbol{
+  background: radial-gradient(circle at 38% 26%, #c9f6ff, var(--neon-cyan) 50%, #0a5b6e 100%);
+  box-shadow: 0 0 14px rgba(46,230,255,.65), inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 0 2px rgba(200,245,255,.5);
+  font-size: min(calc(var(--nrh) * .64), calc(var(--ncw) * .82));
+}
+.neon-reel-symbol.neon-glitch-symbol{
+  background: radial-gradient(circle at 38% 26%, #f3c9ff, var(--neon-purple) 50%, #3a1690 100%);
+  box-shadow: 0 0 14px rgba(124,92,255,.65), inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 0 2px rgba(230,210,255,.5);
+  font-size: min(calc(var(--nrh) * .64), calc(var(--ncw) * .82));
+}
+
+.neon-message{
+  flex: 0 0 auto; text-align:center; font-weight:700; color: var(--neon-cyan);
+  font-size:.86rem; min-height: 1.3em; text-shadow: 0 0 10px rgba(46,230,255,.5);
+}
+
+.neon-dock{ flex: 0 0 auto; display:flex; flex-direction:column; gap: 6px; padding: 6px 2px 2px; }
+.neon-win-display strong{ color: var(--neon-green); }
+.neon-turbo{ border-color: rgba(124,92,255,.4); }
+.neon-turbo:hover{ border-color: rgba(46,230,255,.6); color: var(--ink); }
+.neon-turbo.active{
+  background: linear-gradient(180deg, rgba(46,230,255,.28), rgba(124,92,255,.14));
+  border-color: var(--neon-cyan); color: var(--neon-cyan);
+  box-shadow: 0 0 14px rgba(46,230,255,.45), inset 0 1px 0 rgba(255,255,255,.2);
+}
+.btn-spin.neon-btn-spin{
+  background: linear-gradient(180deg, var(--neon-pink), #a3178f);
+  color:#fff; border: none; box-shadow: 0 0 18px rgba(255,46,196,.5), inset 0 1px 0 rgba(255,255,255,.25);
+  text-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.btn-spin.neon-btn-spin:hover{ filter: brightness(1.1); }
+
+/* Bonus card recolors (shared modal shell, neon palette) */
+.neon-bonus-modal .neon-bonus-card{
+  background: linear-gradient(160deg, #2c1247, #150a22);
+  border-color: var(--neon-purple);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(124,92,255,.25), 0 0 40px rgba(124,92,255,.25);
+}
+.neon-bonus-modal .neon-bonus-card h3{ color: var(--neon-cyan); text-shadow: 0 0 10px rgba(46,230,255,.5); }
+.neon-superwin-modal .superwin-card{
+  background: linear-gradient(160deg, #3a0f38, #170a1f);
+  border-color: var(--neon-pink);
+  box-shadow: var(--shadow-lg), 0 0 50px rgba(255,46,196,.4), 0 0 0 1px rgba(255,150,230,.25);
+}
+.neon-superwin-modal .superwin-card::before{
+  background: repeating-conic-gradient(from 0deg, rgba(255,46,196,.16) 0deg 7deg, transparent 7deg 15deg);
+}
+.neon-superwin-modal .superwin-title{
+  background: linear-gradient(180deg, #fff2ff, var(--neon-pink) 55%, var(--neon-purple));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 2px 18px rgba(255,46,196,.5);
+}
+.neon-superwin-modal .superwin-sub{ color: var(--neon-cyan); }
+
+.neon-paytable-modal .paytable-card{ border-color: rgba(46,230,255,.4); }
+.neon-paytable-modal .paytable-card h3{ color: var(--neon-cyan); }
+.neon-paytable-row .neon-reel-symbol{ flex: 0 0 auto; width: 40px; height: 40px; font-size: 22px !important; }
+.neon-paytable-row .neon-reel-symbol.neon-shape-badge{ font-size: 18px !important; }
+.neon-paytable-row-pays strong{ color: var(--neon-cyan) !important; }
+.neon-paytable-modal .paytable-row-pays strong{ color: var(--neon-cyan); }
+
+/* ---------- Bonus Wheel ---------- */
+.neon-wheel-card{
+  position: relative; z-index:1;
+  background: linear-gradient(160deg, #150a22, #05030a);
+  border: 1px solid var(--neon-cyan); border-radius: var(--radius);
+  padding: 22px 22px 24px; max-width: 340px; width: 100%; text-align:center;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(46,230,255,.2), 0 0 45px rgba(46,230,255,.2);
+  animation: modalPop .5s cubic-bezier(.22,1.4,.4,1);
+}
+.neon-wheel-title{ color: var(--neon-cyan); text-shadow: 0 0 10px rgba(46,230,255,.5); margin-bottom: 4px; font-size: 1.2rem; }
+.neon-wheel-sub{ font-size:.82rem; color: var(--ink-dim); margin-bottom: 16px; }
+.neon-wheel-wrap{
+  position: relative; width: min(64vw, 240px); height: min(64vw, 240px);
+  margin: 0 auto 18px; max-height: 34vh;
+}
+.neon-wheel-pointer{
+  position:absolute; top: -6px; left:50%; transform: translateX(-50%);
+  font-size: 1.6rem; color: var(--neon-yellow); z-index: 3;
+  text-shadow: 0 0 8px rgba(255,221,46,.8), 0 2px 4px rgba(0,0,0,.6);
+  line-height: 1;
+}
+.neon-wheel-dial{
+  width: 100%; height: 100%; border-radius: 50%;
+  position: relative; box-sizing: border-box;
+  border: 4px solid rgba(255,255,255,.12);
+  box-shadow: 0 0 0 3px rgba(46,230,255,.4), 0 0 30px rgba(124,92,255,.4), inset 0 0 20px rgba(0,0,0,.5);
+}
+.neon-wheel-seg{
+  position:absolute; inset:0;
+  display:flex; justify-content:center; align-items:flex-start;
+  padding-top: 9%;
+  transform-origin: 50% 50%;
+}
+.neon-wheel-seg span{
+  font-weight:900; font-size: clamp(.72rem, 3vw, .95rem); color:#0a0612;
+  text-shadow: 0 1px 2px rgba(255,255,255,.35);
+}
+.neon-wheel-hub{
+  position:absolute; top:50%; left:50%; width: 15%; height: 15%; transform: translate(-50%,-50%);
+  border-radius: 50%; background: radial-gradient(circle, #fff, var(--neon-cyan) 60%, #0a5b6e 100%);
+  box-shadow: 0 0 14px rgba(46,230,255,.7), 0 2px 6px rgba(0,0,0,.5); z-index: 2;
+}
+.neon-wheel-result{ margin-bottom: 14px; }
+.neon-wheel-result-mult{
+  display:block; font-family:'Cinzel', serif; font-size: 2.1rem; font-weight:800; color: var(--neon-yellow);
+  text-shadow: 0 0 14px rgba(255,221,46,.6);
+}
+.neon-wheel-result-amount{ display:block; font-size: 1rem; color: var(--neon-green); font-weight:700; margin-top: 2px; }
+
+/* =========================================================
    LANDSCAPE PHONES — tilt-to-play
    A phone on its side is wide but short. Stacking the game area on top of
    the control dock (the portrait layout) leaves neither one enough height,
@@ -1086,4 +1373,26 @@ select, input{ font-family: inherit; }
   .slots-spin-row{ flex-direction: row; justify-content:center; }
   .btn-spin{ min-width: unset; width: 100%; padding: 10px 6px; font-size: .84rem; letter-spacing: .04em; }
   .btn-turbo{ width: 46px; height: 42px; flex: 0 0 auto; }
+
+  /* ---- neon overdrive ---- */
+  .neon-room{
+    flex-direction: row; align-items: stretch; gap: 8px;
+    padding: 6px 10px 8px; max-width: none;
+  }
+  .neon-cabinet{ flex: 1 1 auto; padding: 6px 10px 6px; }
+  .neon-marquee{ display:none; }
+  .neon-free-spins-banner{ padding: 3px 10px; }
+  .neon-message{ font-size: .74rem; }
+
+  .neon-dock{
+    flex: 0 0 150px; flex-direction:column; justify-content:center;
+    gap: 8px; overflow-y: auto; padding: 4px 2px;
+  }
+  .neon-dock .dock-row{ flex-direction: column; align-items: stretch; gap: 4px; }
+  .neon-dock .dock-label{ text-align:center; }
+  .neon-win-display{ margin-left: 0; text-align:center; }
+  .btn-spin.neon-btn-spin{ min-width: unset; width: 100%; padding: 10px 6px; font-size: .84rem; letter-spacing: .04em; }
+  .neon-turbo{ width: 46px; height: 42px; flex: 0 0 auto; }
+
+  .neon-wheel-wrap{ width: min(50vh, 200px); height: min(50vh, 200px); max-height: none; }
 }
