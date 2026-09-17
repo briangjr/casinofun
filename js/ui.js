@@ -48,6 +48,7 @@ function goTo(screenId){
   if (screenId === 'achievements') renderAchievements();
   if (screenId === 'settings') renderSettings();
   if (screenId === 'lobby') renderLobby();
+  if (screenId === 'slots') refreshSlotsHud();
 }
 
 document.querySelectorAll('[data-nav]').forEach(el => {
