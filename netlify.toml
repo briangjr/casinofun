@@ -8,3 +8,30 @@
     X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# This project ships frequent updates to the same filenames (no
+# content-hashed filenames), so without this, browsers and CDNs are free
+# to keep serving an old cached copy of the HTML/CSS/JS indefinitely
+# after a new deploy — which looks exactly like "the site is broken"
+# (old JS running against old/mismatched CSS) even though the new files
+# deployed correctly. `must-revalidate` forces every visit to check back
+# with the server for a fresh copy instead of trusting a stale local one.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
