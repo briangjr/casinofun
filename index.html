@@ -25,6 +25,7 @@
       <button class="navbtn active" data-nav="lobby">Lobby</button>
       <button class="navbtn" data-nav="blackjack">Blackjack</button>
       <button class="navbtn" data-nav="slots">Slots</button>
+      <button class="navbtn" data-nav="neon">Neon Overdrive</button>
       <button class="navbtn" data-nav="history">History</button>
       <button class="navbtn" data-nav="achievements">Achievements</button>
       <button class="navbtn" data-nav="settings">Settings</button>
@@ -37,7 +38,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -91,7 +91,18 @@
         </div>
         <div class="game-card-body">
           <h3>Sunset Stampede</h3>
-          <p>5-reel wildlife slots. Land 3 coins for 8 free spins, and chase the wild sunset multiplier.</p>
+          <p>5-reel wildlife slots. Land 3 coins for 6 free spins, and chase the wild sunset multiplier.</p>
+          <button class="btn btn-gold">Play Now</button>
+        </div>
+      </div>
+
+      <div class="game-card neon-card" data-nav="neon">
+        <div class="game-card-art neon-art">
+          <span class="reel-emoji">👾</span><span class="reel-emoji">💠</span><span class="reel-emoji">⚡</span>
+        </div>
+        <div class="game-card-body">
+          <h3>Neon Overdrive</h3>
+          <p>7-reel cyberpunk slots. Land 3 Cores for the Bonus Wheel, or 3 Glitches for wild-multiplier free spins.</p>
           <button class="btn btn-gold">Play Now</button>
         </div>
       </div>
@@ -111,7 +122,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -208,7 +218,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -282,7 +291,116 @@
       <button class="bank-close" id="btn-paytable-close">&times;</button>
       <h3>Paytable</h3>
       <div class="paytable-list" id="paytable-list"><!-- injected by JS --></div>
-      <p class="settings-help">Payouts are &times; your bet, for a symbol appearing left-to-right across 3, 4 or 5 consecutive reels. The sunset is wild and substitutes for anything above &mdash; land 3 coins anywhere for 8 free spins.</p>
+      <p class="settings-help">Payouts are &times; your bet, for a symbol appearing left-to-right across 3, 4 or 5 consecutive reels. The sunset is wild and substitutes for anything above &mdash; land 3 coins anywhere for 6 free spins.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ================= NEON OVERDRIVE (placeholder) ================= -->
+<main id="screen-neon" class="screen">
+  <header class="screen-subheader neon-subheader">
+    <button class="subnav-back" data-nav="lobby"><span class="back-arrow">&lsaquo;</span> Lobby</button>
+    <div class="subnav-title">Neon Overdrive</div>
+    <div class="hud-group">
+      <div class="wallet-pill" data-nav="settings" title="Add funds in Settings">
+        <span class="chip-ico">🪙</span>
+        <span class="wallet-amount">$0</span>
+      </div>
+      <button class="bank-pill" title="Open your bank">
+        <span class="chip-ico">🏦</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="neon-room">
+    <div class="neon-cabinet">
+      <div class="neon-marquee">
+        <div class="neon-logo">
+          <span class="neon-logo-main">NEON <span>OVERDRIVE</span></span>
+          <span class="neon-logo-sub">BONUS WHEEL &bull; GLITCH SPINS</span>
+        </div>
+        <button class="paytable-btn neon-paytable-btn" id="neon-btn-paytable" title="Paytable">?</button>
+      </div>
+
+      <div class="free-spins-banner neon-free-spins-banner" id="neon-free-spins-banner" hidden>
+        <span class="fs-label">GLITCH SPINS</span>
+        <span class="fs-count" id="neon-fs-count">0</span>
+        <span class="fs-sep">left</span>
+      </div>
+
+      <div class="neon-reel-window" id="neon-reel-window"><!-- 7 reel columns injected by JS --></div>
+
+      <div class="neon-message" id="neon-message">Place your bet and spin the reels!</div>
+    </div>
+
+    <div class="neon-dock">
+      <div class="dock-row">
+        <label class="dock-label">Bet</label>
+        <div class="stepper" id="neon-bet-stepper">
+          <button class="stepper-btn" id="neon-bet-step-down" type="button">&minus;</button>
+          <span class="stepper-value" id="neon-bet-value">$0.30</span>
+          <button class="stepper-btn" id="neon-bet-step-up" type="button">&plus;</button>
+        </div>
+        <span class="slots-win-display neon-win-display" id="neon-win-display" hidden>WIN <strong id="neon-win-amount">$0</strong></span>
+      </div>
+      <div class="dock-row slots-spin-row">
+        <button class="btn-turbo neon-turbo" id="neon-btn-turbo" type="button" title="Turbo spin — near-instant reels, but still slows down for a 2-coin near miss">
+          <span class="btn-turbo-ico">⚡</span><span class="btn-turbo-label">TURBO</span>
+        </button>
+        <button class="btn btn-gold btn-spin neon-btn-spin" id="neon-btn-spin">SPIN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Glitch free-spins triggered/retriggered/wrap-up overlay -->
+  <div class="bonus-modal neon-bonus-modal" id="neon-bonus-modal" hidden>
+    <div class="confetti-layer" id="neon-bonus-confetti"></div>
+    <div class="bonus-card neon-bonus-card">
+      <div class="bonus-icon" id="neon-bonus-modal-icon">🌀</div>
+      <h3 id="neon-bonus-modal-title">🌀 Glitch Detected!</h3>
+      <p id="neon-bonus-modal-text">You landed 3 glitches &mdash; 7 Glitch Spins awarded!</p>
+      <button class="btn btn-gold" id="neon-btn-bonus-continue">Let's Go</button>
+    </div>
+  </div>
+
+  <!-- Bonus Wheel overlay -->
+  <div class="bonus-modal neon-wheel-modal" id="neon-wheel-modal" hidden>
+    <div class="neon-wheel-card">
+      <h3 class="neon-wheel-title">💠 Core Overload!</h3>
+      <p class="neon-wheel-sub" id="neon-wheel-sub">Spin the wheel for an instant multiplier.</p>
+      <div class="neon-wheel-wrap">
+        <div class="neon-wheel-pointer">▼</div>
+        <div class="neon-wheel-dial" id="neon-wheel-dial"><!-- segments injected by JS --></div>
+        <div class="neon-wheel-hub"></div>
+      </div>
+      <div class="neon-wheel-result" id="neon-wheel-result" hidden>
+        <span class="neon-wheel-result-mult" id="neon-wheel-result-mult">0×</span>
+        <span class="neon-wheel-result-amount" id="neon-wheel-result-amount">$0</span>
+      </div>
+      <button class="btn btn-gold" id="neon-btn-wheel-spin">Spin The Wheel</button>
+      <button class="btn btn-ghost" id="neon-btn-wheel-continue" hidden>Continue</button>
+    </div>
+  </div>
+
+  <!-- Super win overlay -->
+  <div class="bonus-modal superwin-modal neon-superwin-modal" id="neon-superwin-modal" hidden>
+    <div class="confetti-layer" id="neon-superwin-confetti"></div>
+    <div class="bonus-card superwin-card">
+      <div class="bonus-icon superwin-icon">🏆</div>
+      <h3 class="superwin-title">SUPER WIN!</h3>
+      <div class="superwin-amount" id="neon-superwin-amount">$0.00</div>
+      <p class="superwin-sub" id="neon-superwin-sub">40&times; your bet!</p>
+      <button class="btn btn-gold" id="neon-btn-superwin-continue">Awesome!</button>
+    </div>
+  </div>
+
+  <!-- Paytable modal -->
+  <div class="paytable-modal neon-paytable-modal" id="neon-paytable-modal" hidden>
+    <div class="paytable-card">
+      <button class="bank-close" id="neon-btn-paytable-close">&times;</button>
+      <h3>Paytable</h3>
+      <div class="paytable-list" id="neon-paytable-list"><!-- injected by JS --></div>
+      <p class="settings-help">Payouts are &times; your bet, for a symbol appearing left-to-right across 3 to 7 consecutive reels. Surge is wild and substitutes for anything above. Land 3 Cores anywhere for the Bonus Wheel &mdash; land 3 Glitches anywhere for Glitch Spins.</p>
     </div>
   </div>
 </main>
@@ -299,7 +417,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -334,7 +451,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -359,7 +475,6 @@
       </div>
       <button class="bank-pill" title="Open your bank">
         <span class="chip-ico">🏦</span>
-        <span class="bank-amount">$0</span>
       </button>
     </div>
   </header>
@@ -487,6 +602,7 @@
 <script src="js/blackjack.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/slots.js"></script>
+<script src="js/neon.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
