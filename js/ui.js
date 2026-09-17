@@ -49,6 +49,7 @@ function goTo(screenId){
   if (screenId === 'settings') renderSettings();
   if (screenId === 'lobby') renderLobby();
   if (screenId === 'slots') refreshSlotsHud();
+  if (screenId === 'neon') refreshNeonHud();
 }
 
 document.querySelectorAll('[data-nav]').forEach(el => {
@@ -60,7 +61,9 @@ function refreshWalletHud(){
   const balanceText = formatMoney(account.balance);
   const bankText = formatMoney(account.bank);
   document.querySelectorAll('.wallet-amount').forEach(el => { el.textContent = balanceText; });
-  document.querySelectorAll('.bank-amount').forEach(el => { el.textContent = bankText; });
+  // Bank balance is intentionally NOT shown in the always-visible header pill —
+  // it only appears in the bank modal itself and on the lobby/settings screens,
+  // which the player has to actively open to see it.
   const lobbyBank = document.getElementById('lobby-bank');
   if (lobbyBank) lobbyBank.textContent = bankText;
   const settingsBank = document.getElementById('settings-bank-balance');

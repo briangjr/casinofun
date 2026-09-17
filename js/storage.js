@@ -84,8 +84,8 @@ function saveState(state){
 
 function formatMoney(n){
   const sign = n < 0 ? '-' : '';
-  const abs = Math.abs(Math.round(n));
-  return sign + '$' + abs.toLocaleString('en-US');
+  const abs = Math.abs(n);
+  return sign + '$' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function addFunds(state, amount){

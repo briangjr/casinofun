@@ -56,14 +56,38 @@ function rollWeightedSymbol(){
   return SYMBOL_WEIGHTS[0][0];
 }
 
-// Wild multiplier: rare in the base game, guaranteed (and always >=2x) in
-// free spins.
-const WILD_MULT_TABLE = [ [2, 50], [3, 25], [5, 15], [10, 10] ];
+// Wild multiplier: rare in the base game. Free spins used to roll a
+// guaranteed >=2x multiplier on literally every wild, which — compounded
+// across every wild landed over a whole bonus session (several per spin,
+// several spins per session) — pushed the AVERAGE session payout to over
+// 100x the triggering bet. Simulated 400k+ bonus sessions (see
+// scratchpad sim_final*.js) to retune this: the free-spins table below
+// mostly resolves to "no bonus" (a wild is still a wild, just no extra
+// multiplier), with rare escalating tiers, and a tiny long tail up to
+// 3000x on a single wild. Combined with the lower free-spin count below,
+// that lands the average bonus session around ~20-25x the bet — still
+// "pretty random" spin to spin — while keeping a genuine (just very rare,
+// roughly 1-in-6000 sessions) shot at a jackpot session north of 5000x.
+// Nothing here caps the upside; it's just far less likely to be huge.
+const WILD_MULT_TABLE_BASE = [ [2, 50], [3, 25], [5, 15], [10, 10] ];
+const WILD_MULT_TABLE_BONUS = [
+  [1, 94.9], [2, 3.3], [3, 1.0], [5, 0.5], [10, 0.2],
+  [50, 0.07], [150, 0.02], [600, 0.007], [3000, 0.003],
+];
 function rollWildMultiplier(inBonus){
-  if (!inBonus && Math.random() > 0.15) return null; // base game: usually no multiplier at all
-  const total = WILD_MULT_TABLE.reduce((s, [, w]) => s + w, 0);
+  if (inBonus){
+    const total = WILD_MULT_TABLE_BONUS.reduce((s, [, w]) => s + w, 0);
+    let r = Math.random() * total;
+    for (const [mult, w] of WILD_MULT_TABLE_BONUS){
+      r -= w;
+      if (r <= 0) return mult > 1 ? mult : null;
+    }
+    return null;
+  }
+  if (Math.random() > 0.15) return null; // base game: usually no multiplier at all
+  const total = WILD_MULT_TABLE_BASE.reduce((s, [, w]) => s + w, 0);
   let r = Math.random() * total;
-  for (const [mult, w] of WILD_MULT_TABLE){
+  for (const [mult, w] of WILD_MULT_TABLE_BASE){
     r -= w;
     if (r <= 0) return mult;
   }
@@ -282,10 +306,9 @@ function setMessage(text){
   if (el) el.textContent = text;
 }
 
-/* formatMoney() rounds to whole dollars everywhere else in the app (by
-   design — see storage.js); slots bets/wins are cents-precise, so they
-   get their own always-2-decimal formatter instead of touching that
-   shared behavior. */
+/* formatMoney() (storage.js) takes a dollar amount; this one takes an
+   integer cents amount instead, since bets/wins here are tracked in
+   cents internally. Both now render with 2 decimal places. */
 function formatCents(cents){
   const sign = cents < 0 ? '-' : '';
   const abs = Math.abs(Math.round(cents));
@@ -457,17 +480,17 @@ function describeWins(wins){
 async function handleBonusOutcome(coinCount){
   if (!inFreeSpins && coinCount >= 3){
     inFreeSpins = true;
-    freeSpinsRemaining = 8;
+    freeSpinsRemaining = 6;
     freeSpinsSessionWin = 0;
-    await showBonusModal('🪙 Bonus Triggered!', `You landed ${coinCount} coins — 8 Free Spins awarded!`, { icon: '🔔' });
+    await showBonusModal('🪙 Bonus Triggered!', `You landed ${coinCount} coins — 6 Free Spins awarded!`, { icon: '🔔' });
   } else if (inFreeSpins){
     // The spin that just played always counts against the total, whether
     // or not it also retriggers more — a retrigger tops the count back up,
     // it doesn't give this spin back for free.
     freeSpinsRemaining -= 1;
     if (coinCount >= 2){
-      freeSpinsRemaining += 5;
-      await showBonusModal('🪙 Retrigger!', `${coinCount} coins in one spin — 5 more Free Spins!`, { icon: '🔔' });
+      freeSpinsRemaining += 4;
+      await showBonusModal('🪙 Retrigger!', `${coinCount} coins in one spin — 4 more Free Spins!`, { icon: '🔔' });
     } else if (freeSpinsRemaining <= 0){
       const wonTxt = formatCents(freeSpinsSessionWin);
       inFreeSpins = false;
@@ -558,7 +581,7 @@ function buildPaytable(){
   const rows = [
     { key: 'wild', data: WILD, note: 'Wild — substitutes for any symbol, rare multiplier (always in free spins)' },
     ...order.map(k => ({ key: k, data: SLOT_SYMBOLS[k] })),
-    { key: 'coin', data: COIN, note: '3 anywhere = 8 Free Spins · 2+ in a free spin = +5 more' },
+    { key: 'coin', data: COIN, note: '3 anywhere = 6 Free Spins · 2+ in a free spin = +4 more' },
   ];
   rows.forEach(({ key, data, note }) => {
     const row = document.createElement('div');
