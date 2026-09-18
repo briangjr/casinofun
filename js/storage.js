@@ -19,6 +19,7 @@ function defaultState(){
       felt: 'green',
       sound: true,
       speed: 'normal',
+      reelSpeed: 'normal', // how fast the slot columns (Sunset Stampede + Neon Overdrive) spin
     },
     stats: {
       startingBalance: STARTING_BALANCE,

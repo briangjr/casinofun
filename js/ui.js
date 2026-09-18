@@ -16,6 +16,15 @@ function dealMs(){ return SPEED_MS[account.settings.speed] || SPEED_MS.normal; }
 function flipMs(){ return Math.max(180, Math.round(dealMs() * 0.5)); }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
+// How fast the slot columns spin (Settings → Reel Spin Speed), shared by both
+// Sunset Stampede and Neon Overdrive. A multiplier > 1 stretches out each
+// column's stop timing AND slows its visual scroll rate (see reelSpeedScale
+// usage in slots.js/neon.js), so "Relaxed" genuinely looks lazier rather than
+// just taking longer to lock in the same-speed scroll. Turbo mode ignores
+// this entirely — it's a separate, always-blazing-fast override.
+const REEL_SPEED_SCALE = { slow: 1.5, normal: 1, fast: 0.55 };
+function reelSpeedScale(){ return REEL_SPEED_SCALE[account.settings.reelSpeed] || 1; }
+
 /* ---------------- audio (procedurally synthesized, no external assets) ----
    Everything here is built at runtime from oscillators + filtered noise —
    there are no sound files to ship. The palette is modeled after typical
@@ -1020,6 +1029,7 @@ function renderSettings(){
   document.getElementById('setting-felt').value = account.settings.felt;
   document.getElementById('setting-sound').checked = account.settings.sound;
   document.getElementById('setting-speed').value = account.settings.speed;
+  document.getElementById('setting-reelspeed').value = account.settings.reelSpeed;
 
   const net = lifetimeNet(account);
   const tiles = [
@@ -1085,6 +1095,10 @@ document.getElementById('setting-sound').addEventListener('change', e => {
 
 document.getElementById('setting-speed').addEventListener('change', e => {
   updateSettings(account, { speed: e.target.value });
+});
+
+document.getElementById('setting-reelspeed').addEventListener('change', e => {
+  updateSettings(account, { reelSpeed: e.target.value });
 });
 
 document.getElementById('btn-reset-all').addEventListener('click', () => {

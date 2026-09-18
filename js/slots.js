@@ -352,7 +352,10 @@ async function spinColumn(c, finalSymbols, wildMultByCell, duration, fast){
   // as the last `rows` cells, so it looks like it's spinning through and
   // then lands exactly on the result.
   strip.innerHTML = '';
-  const rowsPerSecond = fast ? 46 : 20;
+  // Turbo always scrolls at its own fixed blazing rate; a non-turbo spin's
+  // scroll rate is the base rate divided by the Settings reel-speed scale,
+  // so "Relaxed" (scale 1.5) visibly crawls and "Fast" (scale 0.55) zips.
+  const rowsPerSecond = fast ? 46 : (20 / reelSpeedScale());
   const fillerCount = Math.max(fast ? 3 : 6, Math.round((duration / 1000) * rowsPerSecond));
   fillerCountByCol[c] = fillerCount;
   for (let i = 0; i < fillerCount; i++) strip.appendChild(buildSymbolCellEl(rollWeightedSymbol(), null));
@@ -412,7 +415,8 @@ async function doSpin(){
   // (non-turbo) gap for its own stop, so that reveal keeps its suspense
   // even mid-turbo-spin — and everything after it inherits the later
   // absolute time that produces, so the order is never violated.
-  const NORMAL_BASE = 500, NORMAL_GAP = 400;
+  const speedScale = reelSpeedScale();
+  const NORMAL_BASE = Math.round(500 * speedScale), NORMAL_GAP = Math.round(400 * speedScale);
   const TURBO_BASE = 70, TURBO_GAP = 90;
   const stopAt = [];
   const fastFlags = [];

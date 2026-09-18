@@ -336,7 +336,9 @@ async function neonSpinColumn(c, finalSymbols, wildMultByCell, duration, fast){
   const rows = finalSymbols.length;
 
   strip.innerHTML = '';
-  const rowsPerSecond = fast ? 50 : 22;
+  // See slots.js's neonSpinColumn twin: turbo keeps its own fixed fast rate,
+  // a normal spin's scroll rate follows the Settings reel-speed scale.
+  const rowsPerSecond = fast ? 50 : (22 / reelSpeedScale());
   const fillerCount = Math.max(fast ? 3 : 6, Math.round((duration / 1000) * rowsPerSecond));
   neonFillerCountByCol[c] = fillerCount;
   for (let i = 0; i < fillerCount; i++) strip.appendChild(neonBuildCellEl(neonRollWeightedSymbol(), null));
@@ -388,7 +390,8 @@ async function neonDoSpin(){
   const spin = neonGenerateSpin();
   neonSizeReels(spin.colRows);
 
-  const NORMAL_BASE = 480, NORMAL_GAP = 340;
+  const speedScale = reelSpeedScale();
+  const NORMAL_BASE = Math.round(480 * speedScale), NORMAL_GAP = Math.round(340 * speedScale);
   const TURBO_BASE = 60, TURBO_GAP = 75;
   const stopAt = [];
   const fastFlags = [];
