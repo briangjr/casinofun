@@ -36,6 +36,16 @@ const ICON_TIER = { deer: 'tier-common', wolf: 'tier-uncommon', eagle: 'tier-rar
 // "Super Win" and earns its own congrats screen.
 const SUPER_WIN_MULT = 40;
 
+// Simulated 1M+ spins against the paytable below (see scratchpad
+// sim_rtp_tune.js) and found the BASE game — every regular, non-bonus
+// spin — was returning north of 300% of everything wagered on average,
+// i.e. the machine was printing money. This scales every base-game win
+// down to a realistic, still-winnable level (RTP ~85-90%, still hits on
+// roughly 3 spins out of 5, just usually for small change) without
+// touching the free-spins bonus's own already-tuned economy below —
+// evaluateWins() only applies this while NOT in free spins.
+const BASE_GAME_PAY_SCALE = 0.25;
+
 // Weighted symbol pool for the 3 non-coin cells of every reel column.
 // Coins are rolled separately per-column (see spinColumn below) so that
 // at most one coin can land per reel, matching the "2 coins = near miss,
@@ -45,7 +55,7 @@ const SYMBOL_WEIGHTS = [
   ['deer', 9], ['wolf', 7], ['eagle', 5], ['bison', 3], ['wild', 4],
 ];
 const WEIGHT_TOTAL = SYMBOL_WEIGHTS.reduce((s, [, w]) => s + w, 0);
-const COIN_CHANCE = 0.11; // per-reel chance of that reel carrying a coin this spin
+const COIN_CHANCE = 0.075; // per-reel chance of that reel carrying a coin this spin (lowered along with BASE_GAME_PAY_SCALE — the bonus round is meant to be a rarer treat, not a regular occurrence)
 
 function rollWeightedSymbol(){
   let r = Math.random() * WEIGHT_TOTAL;
@@ -283,7 +293,10 @@ function evaluateWins(columns, wildMultByCell){
     if (run >= 3){
       const data = key === 'wild' ? WILD : SLOT_SYMBOLS[key];
       const payMult = data.pay[Math.min(run, 5) - 3];
-      const amountCents = Math.round(currentBetCents() * payMult * bestWildMult);
+      // BASE_GAME_PAY_SCALE only applies outside free spins — a free-spins
+      // session keeps its full, previously-tuned payout (see doSpin below).
+      const scale = inFreeSpins ? 1 : BASE_GAME_PAY_SCALE;
+      const amountCents = Math.round(currentBetCents() * payMult * bestWildMult * scale);
       wins.push({ key, count: run, amountCents, wildMult: bestWildMult, cells: winningCells });
     }
   }
@@ -358,7 +371,7 @@ async function spinColumn(c, finalSymbols, wildMultByCell, duration, fast){
   strip.style.transform = `translateY(-${travel}px)`;
 
   await new Promise(resolve => setTimeout(resolve, duration));
-  beep(300 + c * 20, 0.05, 'triangle', 0.03); // a little "tick" as this reel locks in
+  sfxReelTick(c); // a little mechanical "tick" as this reel locks in
 }
 
 function updateNearMiss(coinCols, stoppedThrough){
@@ -493,9 +506,10 @@ async function handleBonusOutcome(coinCount){
       await showBonusModal('🪙 Retrigger!', `${coinCount} coins in one spin — 4 more Free Spins!`, { icon: '🔔' });
     } else if (freeSpinsRemaining <= 0){
       const wonTxt = formatCents(freeSpinsSessionWin);
+      const bigWin = freeSpinsSessionWin >= currentBetCents() * 20;
       inFreeSpins = false;
       freeSpinsRemaining = 0;
-      await showBonusModal('Free Spins Complete!', `You won ${wonTxt} total during your free spins.`, { icon: '🏁', celebrate: false });
+      await showBonusModal('Free Spins Complete!', `You won ${wonTxt} total during your free spins.`, { icon: '🏁', celebrate: false, big: bigWin });
     }
   }
   refreshSlotsHud();
@@ -528,7 +542,7 @@ function spawnConfetti(layerEl, count = 40){
    triggered/retriggered bonus. Pass { celebrate:false } for a plain
    recap (the free-spins wrap-up) with no confetti. */
 function showBonusModal(title, text, opts = {}){
-  const { celebrate = true, icon = '🔔' } = opts;
+  const { celebrate = true, icon = '🔔', big = false } = opts;
   return new Promise(resolve => {
     document.getElementById('bonus-modal-title').textContent = title;
     document.getElementById('bonus-modal-text').textContent = text;
@@ -536,12 +550,12 @@ function showBonusModal(title, text, opts = {}){
     const modal = document.getElementById('bonus-modal');
     const confettiLayer = document.getElementById('bonus-confetti');
     modal.hidden = false;
-    if (celebrate){
+    if (celebrate || big){
       spawnConfetti(confettiLayer);
     } else if (confettiLayer){
       confettiLayer.innerHTML = '';
     }
-    sfxAchievement();
+    if (big) sfxBigWin(); else sfxAchievement();
     const btn = document.getElementById('btn-bonus-continue');
     const onClick = () => {
       modal.hidden = true;
@@ -561,8 +575,7 @@ function showSuperWinModal(amountCents, multiple){
     const modal = document.getElementById('superwin-modal');
     modal.hidden = false;
     spawnConfetti(document.getElementById('superwin-confetti'), 60);
-    sfxAchievement();
-    setTimeout(() => sfxWin(), 200);
+    sfxBigWin();
     const btn = document.getElementById('btn-superwin-continue');
     const onClick = () => {
       modal.hidden = true;

@@ -37,6 +37,15 @@ const NEON_ICON_TIER = { sat: 'tier-common', brain: 'tier-uncommon', invader: 't
 
 const NEON_SUPER_WIN_MULT = 40;
 
+// Same simulation exercise as Sunset Stampede (see scratchpad
+// sim_rtp_tune.js) found this game's base game running just as hot —
+// north of 280% RTP from regular spins alone. Scales every base-game win
+// down to a realistic, still-winnable level, same as slots.js, without
+// touching the Bonus Wheel's own 3x-500x odds or the Glitch Spins'
+// already-tuned economy — neonEvaluateWins() only applies this while NOT
+// in free spins.
+const NEON_BASE_GAME_PAY_SCALE = 0.25;
+
 const NEON_SYMBOL_WEIGHTS = [
   ['diamond', 18], ['triangle', 18], ['circle', 15], ['square', 15],
   ['sat', 9], ['brain', 7], ['invader', 5], ['mecharm', 3], ['wild', 4],
@@ -44,9 +53,11 @@ const NEON_SYMBOL_WEIGHTS = [
 const NEON_WEIGHT_TOTAL = NEON_SYMBOL_WEIGHTS.reduce((s, [, w]) => s + w, 0);
 // Each reel independently has a small, mutually-exclusive chance of
 // carrying a Core (wheel trigger) or a Glitch (free-spins trigger) instead
-// of a normal symbol — never both in the same reel the same spin.
-const NEON_CORE_CHANCE = 0.07;
-const NEON_GLITCH_CHANCE = 0.07;
+// of a normal symbol — never both in the same reel the same spin. Lowered
+// from 0.07 along with NEON_BASE_GAME_PAY_SCALE — both bonuses are meant
+// to be rarer treats, not regular occurrences.
+const NEON_CORE_CHANCE = 0.05;
+const NEON_GLITCH_CHANCE = 0.05;
 
 function neonRollWeightedSymbol(){
   let r = Math.random() * NEON_WEIGHT_TOTAL;
@@ -279,7 +290,10 @@ function neonEvaluateWins(columns, wildMultByCell){
     if (run >= 3){
       const data = key === 'wild' ? NEON_WILD : NEON_SYMBOLS[key];
       const payMult = data.pay[Math.min(run, 7) - 3];
-      const amountCents = Math.round(neonCurrentBetCents() * payMult * bestWildMult);
+      // NEON_BASE_GAME_PAY_SCALE only applies outside free spins — a
+      // Glitch Spins session keeps its full, previously-tuned payout.
+      const scale = neonInFreeSpins ? 1 : NEON_BASE_GAME_PAY_SCALE;
+      const amountCents = Math.round(neonCurrentBetCents() * payMult * bestWildMult * scale);
       wins.push({ key, count: run, amountCents, wildMult: bestWildMult, cells: winningCells });
     }
   }
@@ -341,7 +355,7 @@ async function neonSpinColumn(c, finalSymbols, wildMultByCell, duration, fast){
   strip.style.transform = `translateY(-${travel}px)`;
 
   await new Promise(resolve => setTimeout(resolve, duration));
-  beep(500 + c * 15, 0.05, 'square', 0.03);
+  sfxReelTick(c);
 }
 
 function neonUpdateNearMiss(coreCols, glitchCols, stoppedThrough){
@@ -464,16 +478,17 @@ async function neonHandleGlitchOutcome(glitchCount){
       await neonShowBonusModal('🌀 Re-Glitched!', `${glitchCount} glitches in one spin — 4 more Glitch Spins!`, { icon: '🌀' });
     } else if (neonFreeSpinsRemaining <= 0){
       const wonTxt = neonFormatCents(neonFreeSpinsSessionWin);
+      const bigWin = neonFreeSpinsSessionWin >= neonCurrentBetCents() * 20;
       neonInFreeSpins = false;
       neonFreeSpinsRemaining = 0;
-      await neonShowBonusModal('Glitch Spins Complete!', `You won ${wonTxt} total during your glitch spins.`, { icon: '🏁', celebrate: false });
+      await neonShowBonusModal('Glitch Spins Complete!', `You won ${wonTxt} total during your glitch spins.`, { icon: '🏁', celebrate: false, big: bigWin });
     }
   }
   refreshNeonHud();
 }
 
 function neonShowBonusModal(title, text, opts = {}){
-  const { celebrate = true, icon = '🌀' } = opts;
+  const { celebrate = true, icon = '🌀', big = false } = opts;
   return new Promise(resolve => {
     document.getElementById('neon-bonus-modal-title').textContent = title;
     document.getElementById('neon-bonus-modal-text').textContent = text;
@@ -481,12 +496,12 @@ function neonShowBonusModal(title, text, opts = {}){
     const modal = document.getElementById('neon-bonus-modal');
     const confettiLayer = document.getElementById('neon-bonus-confetti');
     modal.hidden = false;
-    if (celebrate){
+    if (celebrate || big){
       neonSpawnConfetti(confettiLayer);
     } else if (confettiLayer){
       confettiLayer.innerHTML = '';
     }
-    sfxAchievement();
+    if (big) sfxBigWin(); else sfxAchievement();
     const btn = document.getElementById('neon-btn-bonus-continue');
     const onClick = () => {
       modal.hidden = true;
@@ -525,8 +540,7 @@ function neonShowSuperWinModal(amountCents, multiple){
     const modal = document.getElementById('neon-superwin-modal');
     modal.hidden = false;
     neonSpawnConfetti(document.getElementById('neon-superwin-confetti'), 60);
-    sfxAchievement();
-    setTimeout(() => sfxWin(), 200);
+    sfxBigWin();
     const btn = document.getElementById('neon-btn-superwin-continue');
     const onClick = () => {
       modal.hidden = true;
@@ -558,6 +572,18 @@ function neonBuildWheelDial(){
     segEl.appendChild(label);
     dial.appendChild(segEl);
   });
+}
+
+/* A wheel "clicker" — ticks bunched up early (fast spin) and spread out
+   toward the end (as it decelerates into landing), matching the dial's own
+   easing curve. Gives the spin real anticipation instead of silence. */
+function neonScheduleWheelTicks(durationMs){
+  const n = 26;
+  for (let i = 1; i <= n; i++){
+    const p = i / n;
+    const t = Math.pow(p, 3) * durationMs; // clustered early, spread late
+    setTimeout(() => sfxWheelTick(), t);
+  }
 }
 
 let neonWheelRotation = 0;
@@ -596,6 +622,7 @@ function neonRunBonusWheel(betCents){
       dial.style.transition = 'transform 4.2s cubic-bezier(.11,.67,.16,1)';
       dial.style.transform = `rotate(${target}deg)`;
       beep(220, 0.05, 'square', 0.02);
+      neonScheduleWheelTicks(4200);
 
       setTimeout(() => {
         const seg = NEON_WHEEL_TABLE[idx];
@@ -608,8 +635,7 @@ function neonRunBonusWheel(betCents){
         resultEl.hidden = false;
         spinBtn.hidden = true;
         continueBtn.hidden = false;
-        sfxWin();
-        setTimeout(() => sfxAchievement(), 150);
+        if (seg.mult >= 75) sfxBigWin(); else { sfxWin(); setTimeout(() => sfxAchievement(), 150); }
         const onContinue = () => {
           modal.hidden = true;
           continueBtn.removeEventListener('click', onContinue);

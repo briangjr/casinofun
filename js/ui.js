@@ -16,29 +16,131 @@ function dealMs(){ return SPEED_MS[account.settings.speed] || SPEED_MS.normal; }
 function flipMs(){ return Math.max(180, Math.round(dealMs() * 0.5)); }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 
-/* ---------------- audio (tiny beeps, no external assets) ---------------- */
+/* ---------------- audio (procedurally synthesized, no external assets) ----
+   Everything here is built at runtime from oscillators + filtered noise —
+   there are no sound files to ship. The palette is modeled after typical
+   slot-machine/casino sound design: short filtered-noise transients for
+   physical actions (cards, chips, reels), and bright layered "chime" tones
+   — a fundamental plus a couple of quiet detuned overtones, like a small
+   bell — strung into quick ascending runs for payouts. Bigger wins get a
+   longer, denser run plus a high shimmer tail so they read as more of a
+   moment than a small win's quick 3-note tick-up. Everything is gated by
+   account.settings.sound (Settings → Sound Effects), which the player can
+   flip off at any time. */
 let audioCtx = null;
-function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.05){
-  if (!account.settings.sound) return;
+function getAudioCtx(){
+  if (!account.settings.sound) return null;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  } catch (e) { return null; }
+}
+
+/** A single oscillator blip — light ticks/clicks (chip stepper, reel lock-in). */
+function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.05, delay = 0){
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = type;
     osc.frequency.value = freq;
-    gain.gain.value = vol;
-    osc.connect(gain).connect(audioCtx.destination);
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
-    osc.stop(audioCtx.currentTime + dur);
-  } catch (e) { /* audio unsupported, ignore */ }
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0001), t0 + Math.min(0.01, dur * 0.25));
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  } catch (e) { /* ignore */ }
 }
-const sfxDeal = () => beep(520, 0.05, 'triangle', 0.04);
-const sfxChip = () => beep(720, 0.04, 'square', 0.03);
-const sfxWin = () => { beep(660, 0.09, 'sine', 0.05); setTimeout(() => beep(880, 0.12, 'sine', 0.05), 90); };
+
+/** A short burst of filtered noise, with its decay baked into the buffer —
+    card snaps/slides, chip clacks, reel-lock clicks, shimmer tails. */
+function noiseBurst(dur = 0.05, opts = {}){
+  const { type = 'highpass', freq = 2000, q = 0.7, vol = 0.05, delay = 0 } = opts;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime + delay;
+    const bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
+    const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filt = ctx.createBiquadFilter();
+    filt.type = type; filt.frequency.value = freq; filt.Q.value = q;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filt).connect(gain).connect(ctx.destination);
+    src.start(t0);
+  } catch (e) { /* ignore */ }
+}
+
+/** A small bright "bell": a fundamental plus two quiet detuned overtones,
+    each with its own quick decay. This is the sparkly layer behind every
+    win sound below. */
+function chime(freq = 660, dur = 0.32, vol = 0.06, delay = 0){
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  try {
+    const t0 = ctx.currentTime + delay;
+    [[1, 1, vol], [2.01, 0.45, vol * 0.5], [3.99, 0.22, vol * 0.25]].forEach(([mult, decayMult, v]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq * mult;
+      const d = dur * decayMult + dur * 0.4;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(Math.max(v, 0.0001), t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + d + 0.02);
+    });
+  } catch (e) { /* ignore */ }
+}
+
+/** A run of chimes climbing in pitch, each one's step/gap lightly jittered
+    so it doesn't sound mechanical — the "coin cascade" behind bonus/win
+    celebrations, closest in spirit to a real slot machine payout run. */
+function chimeRun(count, opts = {}){
+  const { startFreq = 660, step = 1.18, stepJitter = 0.05, gap = 0.08, gapJitter = 0.02, dur = 0.26, vol = 0.055 } = opts;
+  let f = startFreq;
+  for (let i = 0; i < count; i++){
+    const stepJ = 1 + (Math.random() * 2 - 1) * stepJitter;
+    const gapJ = (Math.random() * 2 - 1) * gapJitter;
+    chime(f, dur, vol * (0.85 + Math.random() * 0.3), i * gap + gapJ);
+    f *= step * stepJ;
+  }
+}
+
+/** A bright high-frequency shimmer accent, layered on top of the biggest
+    wins — echoes the sparkle/twinkle heard on real jackpot reveals. */
+function sfxSparkle(){
+  for (let i = 0; i < 6; i++){
+    beep(2800 + Math.random() * 3200, 0.05, 'sine', 0.012, i * 0.03);
+  }
+  noiseBurst(0.45, { type: 'highpass', freq: 6000, q: 0.4, vol: 0.014 });
+}
+
+const sfxDeal = () => { noiseBurst(0.05, { type: 'bandpass', freq: 2200, q: 0.9, vol: 0.05 }); beep(300, 0.04, 'triangle', 0.02, 0.008); };
+const sfxFlip = () => { noiseBurst(0.03, { type: 'highpass', freq: 3500, q: 0.8, vol: 0.06 }); beep(220, 0.03, 'square', 0.015, 0.01); };
+const sfxChip = () => { noiseBurst(0.035, { type: 'bandpass', freq: 1800, q: 1.4, vol: 0.045 }); beep(760, 0.035, 'square', 0.03); };
+const sfxReelTick = (i = 0) => { noiseBurst(0.02, { type: 'bandpass', freq: 1300 + i * 40, q: 2.2, vol: 0.03 }); beep(320 + i * 18, 0.04, 'triangle', 0.022); };
+const sfxWheelTick = () => noiseBurst(0.03, { type: 'bandpass', freq: 2600, q: 4, vol: 0.045 });
 const sfxLose = () => beep(160, 0.18, 'sawtooth', 0.04);
-const sfxFlip = () => beep(340, 0.07, 'sine', 0.03);
-const sfxAchievement = () => { beep(784, 0.08, 'sine', 0.05); setTimeout(() => beep(988, 0.14, 'sine', 0.05), 100); };
+/** A quick 3-note ascending chime — small/ordinary wins. */
+const sfxWin = () => chimeRun(3, { startFreq: 523.25, step: 1.26, gap: 0.09, dur: 0.26, vol: 0.055 });
+/** A 4-note run — bonus triggers/retriggers, achievement toasts, wheel opening. */
+const sfxAchievement = () => chimeRun(4, { startFreq: 587.33, step: 1.22, gap: 0.085, dur: 0.28, vol: 0.06 });
+/** A long cascading run plus a sparkle tail — free-spins totals, the bonus
+    wheel's top tiers, and any single-spin super win. The centerpiece "big
+    dopamine hit" sound. */
+const sfxBigWin = () => { chimeRun(9, { startFreq: 523.25, step: 1.15, stepJitter: 0.05, gap: 0.065, gapJitter: 0.015, dur: 0.34, vol: 0.06 }); setTimeout(() => sfxSparkle(), 90); };
 
 /* ---------------- navigation ---------------- */
 function goTo(screenId){
