@@ -28,6 +28,7 @@ function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
    account.settings.sound (Settings → Sound Effects), which the player can
    flip off at any time. */
 let audioCtx = null;
+let masterBus = null; // shared limiter every sfx/ambience node routes through, so the louder mix below can't clip
 function getAudioCtx(){
   if (!account.settings.sound) return null;
   try {
@@ -36,11 +37,34 @@ function getAudioCtx(){
     return audioCtx;
   } catch (e) { return null; }
 }
+/** Every sound (sfx AND ambience) connects here instead of straight to
+    ctx.destination — a soft limiter so turning everything up doesn't risk
+    harsh clipping when several sounds land at once (a spin win plus reel
+    ticks plus the ambience bed, say). */
+function getMasterBus(){
+  const ctx = getAudioCtx();
+  if (!ctx) return null;
+  if (!masterBus){
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -8; limiter.knee.value = 12; limiter.ratio.value = 6;
+    limiter.attack.value = 0.002; limiter.release.value = 0.15;
+    limiter.connect(ctx.destination);
+    masterBus = limiter;
+  }
+  return masterBus;
+}
+
+// A flat multiplier on every effect's own `vol` — turn this one knob to
+// make everything louder/quieter together instead of re-tuning each call
+// site. AMBIENCE_GAIN (below) is set well under a typical sfx peak so
+// effects always read as louder than the background music, as requested.
+const SFX_MASTER_GAIN = 1.8;
 
 /** A single oscillator blip — light ticks/clicks (chip stepper, reel lock-in). */
 function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.05, delay = 0){
   const ctx = getAudioCtx();
-  if (!ctx) return;
+  const bus = getMasterBus();
+  if (!ctx || !bus) return;
   try {
     const t0 = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
@@ -48,9 +72,9 @@ function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.05, delay = 0){
     osc.type = type;
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0001), t0 + Math.min(0.01, dur * 0.25));
+    gain.gain.exponentialRampToValueAtTime(Math.max(vol * SFX_MASTER_GAIN, 0.0001), t0 + Math.min(0.01, dur * 0.25));
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(bus);
     osc.start(t0);
     osc.stop(t0 + dur + 0.02);
   } catch (e) { /* ignore */ }
@@ -61,7 +85,8 @@ function beep(freq = 440, dur = 0.08, type = 'sine', vol = 0.05, delay = 0){
 function noiseBurst(dur = 0.05, opts = {}){
   const { type = 'highpass', freq = 2000, q = 0.7, vol = 0.05, delay = 0 } = opts;
   const ctx = getAudioCtx();
-  if (!ctx) return;
+  const bus = getMasterBus();
+  if (!ctx || !bus) return;
   try {
     const t0 = ctx.currentTime + delay;
     const bufSize = Math.max(1, Math.round(ctx.sampleRate * dur));
@@ -73,9 +98,9 @@ function noiseBurst(dur = 0.05, opts = {}){
     const filt = ctx.createBiquadFilter();
     filt.type = type; filt.frequency.value = freq; filt.Q.value = q;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.setValueAtTime(vol * SFX_MASTER_GAIN, t0);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(filt).connect(gain).connect(ctx.destination);
+    src.connect(filt).connect(gain).connect(bus);
     src.start(t0);
   } catch (e) { /* ignore */ }
 }
@@ -85,7 +110,8 @@ function noiseBurst(dur = 0.05, opts = {}){
     win sound below. */
 function chime(freq = 660, dur = 0.32, vol = 0.06, delay = 0){
   const ctx = getAudioCtx();
-  if (!ctx) return;
+  const bus = getMasterBus();
+  if (!ctx || !bus) return;
   try {
     const t0 = ctx.currentTime + delay;
     [[1, 1, vol], [2.01, 0.45, vol * 0.5], [3.99, 0.22, vol * 0.25]].forEach(([mult, decayMult, v]) => {
@@ -95,9 +121,9 @@ function chime(freq = 660, dur = 0.32, vol = 0.06, delay = 0){
       osc.frequency.value = freq * mult;
       const d = dur * decayMult + dur * 0.4;
       gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(Math.max(v, 0.0001), t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(Math.max(v * SFX_MASTER_GAIN, 0.0001), t0 + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-      osc.connect(gain).connect(ctx.destination);
+      osc.connect(gain).connect(bus);
       osc.start(t0);
       osc.stop(t0 + d + 0.02);
     });
@@ -142,6 +168,85 @@ const sfxAchievement = () => chimeRun(4, { startFreq: 587.33, step: 1.22, gap: 0
     dopamine hit" sound. */
 const sfxBigWin = () => { chimeRun(9, { startFreq: 523.25, step: 1.15, stepJitter: 0.05, gap: 0.065, gapJitter: 0.015, dur: 0.34, vol: 0.06 }); setTimeout(() => sfxSparkle(), 90); };
 
+/* ---------------- background ambience ----------------
+   A quiet, continuous synthesized pad — a few detuned oscillators through
+   a slowly-modulated filter, not a looped audio file — that plays for as
+   long as the player is on a game screen (Blackjack, Sunset Stampede,
+   Neon Overdrive) and fades out the moment they leave it. Each game gets
+   its own register/waveform/filter so it doesn't feel like the exact same
+   loop everywhere. Its gain (AMBIENCE_GAIN) is set well under a typical
+   sfx hit's peak — see SFX_MASTER_GAIN above — so effects always cut
+   through it clearly instead of competing with it. */
+const AMBIENCE_GAIN = 0.028;
+const AMBIENCE_THEMES = {
+  blackjack: { root: 110,    waveA: 'triangle', waveB: 'sine',     filterHz: 900,  filterSwing: .35, lfoHz: 0.055, detune: 4 },
+  slots:     { root: 146.83, waveA: 'triangle', waveB: 'sine',     filterHz: 1300, filterSwing: .3,  lfoHz: 0.08,  detune: 5 },
+  neon:      { root: 98,     waveA: 'sawtooth', waveB: 'triangle', filterHz: 650,  filterSwing: .5,  lfoHz: 0.12,  detune: 7 },
+};
+let ambience = null; // { master, filter, lfo, oscs } while a bed is playing, else null
+function startAmbience(themeKey){
+  stopAmbience(true); // always clear out any previous bed first
+  const ctx = getAudioCtx();
+  const bus = getMasterBus();
+  const theme = AMBIENCE_THEMES[themeKey];
+  if (!ctx || !bus || !theme) return;
+  try {
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, ctx.currentTime);
+    master.gain.exponentialRampToValueAtTime(AMBIENCE_GAIN, ctx.currentTime + 2.2); // slow fade-in, never a hard start
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = theme.filterHz;
+    filter.Q.value = 0.6;
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = theme.lfoHz;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = theme.filterHz * theme.filterSwing;
+    lfo.connect(lfoGain).connect(filter.frequency);
+    lfo.start();
+
+    // A simple open root/fifth/octave chord — calm, not melodic.
+    const oscs = [];
+    [[1, theme.waveA, 0, 1], [1.5, theme.waveB, theme.detune, 0.5], [2, theme.waveA, -theme.detune, 0.4]]
+      .forEach(([mult, wave, det, level]) => {
+        const osc = ctx.createOscillator();
+        osc.type = wave;
+        osc.frequency.value = theme.root * mult;
+        osc.detune.value = det;
+        const g = ctx.createGain();
+        g.gain.value = level;
+        osc.connect(g).connect(filter);
+        osc.start();
+        oscs.push(osc);
+      });
+
+    filter.connect(master).connect(bus);
+    ambience = { master, filter, lfo, oscs };
+  } catch (e) { /* ignore */ }
+}
+function stopAmbience(instant){
+  if (!ambience || !audioCtx) return;
+  const { master, lfo, oscs } = ambience;
+  ambience = null;
+  try {
+    const now = audioCtx.currentTime;
+    const fade = instant ? 0.05 : 0.9;
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(Math.max(master.gain.value, 0.0001), now);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+    setTimeout(() => { try { lfo.stop(); oscs.forEach(o => o.stop()); } catch (e2) { /* ignore */ } }, fade * 1000 + 60);
+  } catch (e) { /* ignore */ }
+}
+/** Re-checks the currently active screen against the sound setting — used
+    right after the player flips Sound Effects on/off in Settings, so
+    ambience starts/stops immediately instead of waiting for the next nav. */
+function syncAmbienceToCurrentScreen(){
+  const activeId = document.querySelector('.screen.active')?.id?.replace('screen-', '');
+  if (['blackjack', 'slots', 'neon'].includes(activeId)) startAmbience(activeId);
+  else stopAmbience();
+}
+
 /* ---------------- navigation ---------------- */
 function goTo(screenId){
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + screenId));
@@ -152,6 +257,7 @@ function goTo(screenId){
   if (screenId === 'lobby') renderLobby();
   if (screenId === 'slots') refreshSlotsHud();
   if (screenId === 'neon') refreshNeonHud();
+  if (['blackjack', 'slots', 'neon'].includes(screenId)) startAmbience(screenId); else stopAmbience();
 }
 
 document.querySelectorAll('[data-nav]').forEach(el => {
@@ -974,6 +1080,7 @@ document.getElementById('setting-felt').addEventListener('change', e => {
 
 document.getElementById('setting-sound').addEventListener('change', e => {
   updateSettings(account, { sound: e.target.checked });
+  syncAmbienceToCurrentScreen();
 });
 
 document.getElementById('setting-speed').addEventListener('change', e => {
